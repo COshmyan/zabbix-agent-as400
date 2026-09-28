@@ -16,28 +16,45 @@ public class ZabbixAgent extends ZabbixThread {
     }//constructor ZabbixAgent()
 
     public static DataObject process(AgentRequest req) throws ZbxException {
+        DataObject ret;
         Util.log(Util.LOG_DEBUG, "in ZabbixAgent.process(): key_name='%s', full key='%s'",
                 req.getKeyName(), req.getUnparsedKey());
         ZbxMetric command = Config.commands.get(req.getKeyName());
         if (null == command)
             throw new ZbxException("Unsupported item key name: " + req.getKeyName());
         try {
-            return command.process(req);
+            ret = command.process(req);
         } catch (IOException ex) {
             //try to reconnect to AS/400
+            if (!((ZabbixThread)Thread.currentThread()).isAs400CommError()) {
+                Util.log(Util.LOG_WARNING, " ZabbixAgent.process(): '%s' communication error: %s, trying to reconnect...",
+                        req.getUnparsedKey(), ex);
+            }//if(it is the first communication error)
+            AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+            if (system.isConnected())
+                system.disconnectAllServices();
             try {
-                Util.log(Util.LOG_DEBUG, " in ZabbixAgent.process(): communication error, trying to reconnect...");
-                AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
-                if (system.isConnected())
-                    system.disconnectAllServices();
-                return command.process(req);
+                ret = command.process(req);
             } catch (IOException exi) {
-                Util.log(Util.LOG_WARNING," ZabbixAgent.process() '%s' error: %s", req.getUnparsedKey(), ex);
-                throw new ZbxException(ex.toString());
+                if (!((ZabbixThread)Thread.currentThread()).isAs400CommError()) {
+                    Util.log(Util.LOG_WARNING,"  ZabbixAgent.process() '%s' communication error: %s", req.getUnparsedKey(), exi);
+                }//if(it is the first communication error)
+                throw new ZbxException(exi.toString());
+            } finally {
+                ((ZabbixThread)Thread.currentThread()).setAs400CommError(true);
             }//try-catch
+        } catch (Throwable ex) {
+            Util.log(Util.LOG_ERROR, "Error in ZabbixAgent.process(): %s", ex);
+            throw ex;
         } finally {
             Util.log(Util.LOG_DEBUG, "end of ZabbixAgent.process()");
         }//try-catch-finally
+
+        if (((ZabbixThread)Thread.currentThread()).isAs400CommError() && !(req.getKeyName().startsWith("agent."))) {
+            Util.log(Util.LOG_WARNING," ZabbixAgent.process() '%s' communication to AS/400 is working again", req.getUnparsedKey());
+            ((ZabbixThread)Thread.currentThread()).setAs400CommError(false);
+        }//if
+        return ret;
     }//process()
 
     public static void main(String[] args) throws Exception {
@@ -80,8 +97,8 @@ public class ZabbixAgent extends ZabbixThread {
     public void run() {
 
         if (!Config.parseConfig(configFile)) {
-            System.err.printf("Could not process config file '%s', exiting\n", configFile);
-            System.exit(1);
+            Util.log(Util.LOG_CRITICAL,"Could not process config file '%s', exiting\n", configFile);
+            Util.flushLogAndExit();
         }
 
         Util.log(Util.LOG_WARNING, "Starting Zabbix Agent v%s", GenericMetrics.VERSION);
@@ -98,15 +115,38 @@ public class ZabbixAgent extends ZabbixThread {
                             System.getProperty("java.vm.version", "unknown"),
                             System.getProperty("java.vm.info",    "unknown"));
         Util.log(Util.LOG_WARNING, " %s", Copyright.version);
+
+        try {
+            Class.forName("com.ibm.as400.access.AS400");
+            Class.forName("org.json.simple.JSONValue");
+        } catch (ClassNotFoundException ex) {
+            String library = "<unknown>", message = ex.getMessage();
+            if (null != message)
+                if (message.contains("as400"))
+                    library = "jt400.jar";
+                else if (message.contains("json"))
+                    library = "json-simple-<version>.jar";
+            Util.log(Util.LOG_CRITICAL, "The library '%s' is not available, exiting:\n%s", library, ex);
+            Util.flushLogAndExit();
+        }//try-catch(ClassNotFoundException)
+
         GenericMetrics.init();
         As400Metrics.init();
 
         ((ZabbixThread)Thread.currentThread()).system = new com.ibm.as400.access.AS400(Config.getAs400ServerHost());
 
         if (!Config.setDefaultsAndValidate(configFile)) {
-            System.err.printf("Could not validate config file '%s', exiting\n", configFile);
-            System.exit(1);
+            Util.log(Util.LOG_CRITICAL,"Could not validate config file '%s', exiting\n", configFile);
+            Util.flushLogAndExit();
         }
+
+        try {
+            Util.log(Util.LOG_WARNING, " Agent hostname: '%s', System info: %s", Config.getHostname(),
+                    ZabbixAgent.process(new AgentRequest("system.uname")).getValue().toString());
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_CRITICAL, "Error obtaining 'system.uname' metric, exiting\n");
+            Util.flushLogAndExit();
+        }//try-catch
 
         if (system.isConnected())
             system.disconnectAllServices();

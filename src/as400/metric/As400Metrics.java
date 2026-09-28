@@ -434,7 +434,7 @@ public class As400Metrics {
 */
         try {
             new ZbxMetric("vfs.fs.discovery", 0) {
-                public DataObject process(AgentRequest req) throws ZbxException {
+                public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {
                         return new DataObject(req.getUnparsedKey(), QYASPOL.process_asp_discovery());
@@ -449,7 +449,7 @@ public class As400Metrics {
 
         try {
             new ZbxMetric("vfs.fs.size", Util.CF_HAVEPARAMS) {
-                public DataObject process(AgentRequest req) throws ZbxException {
+                public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     String fs = null, mode = null;
                     if (1 > req.getNparam() || "".equals(fs = req.getParam(0)))
                         throw new ZbxException("Bad request: parameters FS needed");
@@ -457,8 +457,36 @@ public class As400Metrics {
                         mode = "total";
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {
-                        return new DataObject(req.getUnparsedKey(),
-                            QYASPOL.process_asp(fs, mode));
+                        switch (mode) {
+                        case "total":
+                        case "free":
+                        case "used":
+                        case "pfree":
+                        case "pused":
+                            return new DataObject(req.getUnparsedKey(),
+                                        QYASPOL.process_asp(fs, mode));
+                        default:
+                            throw new ZbxException("Bad request: invalid parameter '" + mode + "'");
+                        }//switch-case
+                    } finally {
+                        Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
+                    }
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+
+        try {
+            new ZbxMetric("vfs.fs.state", Util.CF_HAVEPARAMS) {
+                public DataObject process(AgentRequest req) throws ZbxException, IOException {
+                    String fs = null;
+                    if (1 > req.getNparam() || "".equals(fs = req.getParam(0)))
+                        throw new ZbxException("Bad request: parameters FS needed");
+                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
+                    try {
+                            return new DataObject(req.getUnparsedKey(),
+                                        QYASPOL.process_asp(fs, "state"));
                     } finally {
                         Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
                     }
@@ -470,7 +498,7 @@ public class As400Metrics {
 
         try {
             new ZbxMetric("as400.disk.discovery", 0) {
-                public DataObject process(AgentRequest req) throws ZbxException {
+                public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {
                         return new DataObject(req.getUnparsedKey(), QYASPOL.process_dsk_discovery());
@@ -485,10 +513,10 @@ public class As400Metrics {
 
         try {
             new ZbxMetric("as400.disk.size", Util.CF_HAVEPARAMS) {
-                public DataObject process(AgentRequest req) throws ZbxException {
+                public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     String fs = null, mode = null;
                     if (1 > req.getNparam() || "".equals(fs = req.getParam(0)))
-                        throw new ZbxException("Bad request: parameters FS needed");
+                        throw new ZbxException("Bad request: parameters DISK needed");
                     if (2 > req.getNparam() || "".equals(mode = req.getParam(1)))
                         mode = "total";
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
@@ -515,14 +543,33 @@ public class As400Metrics {
 
         try {
             new ZbxMetric("as400.disk.state", Util.CF_HAVEPARAMS) {
-                public DataObject process(AgentRequest req) throws ZbxException {
+                public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     String fs = null;
                     if (1 > req.getNparam() || "".equals(fs = req.getParam(0)))
-                        throw new ZbxException("Bad request: parameters FS needed");
+                        throw new ZbxException("Bad request: parameters DISK needed");
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {
                             return new DataObject(req.getUnparsedKey(),
                                         QYASPOL.process_dsk(fs, "state"));
+                    } finally {
+                        Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
+                    }
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+
+        try {
+            new ZbxMetric("as400.disk.asp", Util.CF_HAVEPARAMS) {
+                public DataObject process(AgentRequest req) throws ZbxException, IOException {
+                    String fs = null;
+                    if (1 > req.getNparam() || "".equals(fs = req.getParam(0)))
+                        throw new ZbxException("Bad request: parameters DISK needed");
+                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
+                    try {
+                            return new DataObject(req.getUnparsedKey(),
+                                        QYASPOL.process_dsk(fs, "asp"));
                     } finally {
                         Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
                     }

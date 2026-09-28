@@ -101,11 +101,21 @@ public class PassiveCheck extends ZabbixThread {
                     }//if
                 } catch (InterruptedException ex) {
                     Util.log(Util.LOG_DEBUG," Thread [%s #%d] interrupted in run(): %s", Thread.currentThread().getName(), this.process_num, ex);
+                } catch (Throwable ex) {
+                    //There should not be, but if it's occured - it is critical: stacktrace and stop agent
+                    Util.log(Util.LOG_CRITICAL, ex, "Error in PassiveCheck.run():");
+                    Config.running = false;
+                    continue;
                 }//try-catch
             }//sync
         }//while(main loop)
 
         try {
+/*
+            com.ibm.as400.access.SocketProperties sp = system.getSocketProperties();
+            Util.log(Util.LOG_DEBUG," Thread [%s #%d] has the following SocketProperties:\n  LoginTimeout=%d, SoTimeout=%d, isKeepAlive=%b, SoLinger=%d",
+                Thread.currentThread().getName(), this.process_num, sp.getLoginTimeout(), sp.getSoTimeout(), sp.isKeepAlive(), sp.getSoLinger());
+*/
             if (system.isConnected())
                 system.disconnectAllServices();
         } catch (Exception ex) {
@@ -213,7 +223,7 @@ public class PassiveCheck extends ZabbixThread {
                 Util.log(Util.LOG_WARNING,"PassiveCheck.process(): request is empty, ignored");
             }//if
         } catch (IOException ex) {
-            Util.log(Util.LOG_ERROR, "Error in PassiveCheck.process(), #%d: %s",  process_num, ex);
+            Util.log(Util.LOG_ERROR, "Error in PassiveCheck.process(), #%d: %s", process_num, ex);
         } finally {
             if (null != zbxIn)
                 try { zbxIn.close();  } catch (IOException ex) { ; }

@@ -1,6 +1,7 @@
 package as400.cache;
 import as400.*;
 import java.util.*;
+import java.io.IOException;
 
 public class ZbxCache {
 
@@ -38,7 +39,7 @@ public class ZbxCache {
             return false;
     }//isClearNeeded
 
-    private synchronized void checkCache() throws ZbxException {
+    private synchronized void checkCache() throws ZbxException, IOException {
         if (this.expired < System.currentTimeMillis()) {
             Util.log(Util.LOG_DEBUG, " checkCache(): refreshing cache for %s", name);
             clear();
@@ -47,8 +48,12 @@ public class ZbxCache {
         }//if
     }//checkCache()
 
-    public synchronized ZbxCacheEntry getEntry(String key) throws ZbxException {
+    public synchronized ZbxCacheEntry getEntry(String key) throws ZbxException, IOException {
         checkCache();
+        return this.ht.get(key);
+    }//getEntry()
+
+    public synchronized ZbxCacheEntry getRawEntry(String key) {
         return this.ht.get(key);
     }//getEntry()
 
@@ -62,7 +67,7 @@ public class ZbxCache {
         this.ht.put(key, entry);
     }//putEntry()
 
-    public synchronized String discovery() throws ZbxException {
+    public synchronized String discovery() throws ZbxException, IOException {
 
         checkCache();
 

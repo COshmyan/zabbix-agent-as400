@@ -65,13 +65,13 @@ public class Util {
                 out.printf(message, args);
                 out.println();
             } catch (IOException ie) {
-                    System.err.println ("Error writing to log file " + Config.getLogFile() + ":\n" + ie.toString());
+                    System.out.println ("Error writing to log file " + Config.getLogFile() + ":\n" + ie.toString());
                     System.exit(1);
             }//try-catch block
         }//if
     }//log()
 
-    public static synchronized void log(int level, Exception ex, String message, Object... args) {
+    public static synchronized void log(int level, Throwable ex, String message, Object... args) {
         log(level, message, args);
         ex.printStackTrace(out);
     }//log()
@@ -91,6 +91,26 @@ public class Util {
         }//if (successfully rotated)
     }//rotateLog()
 
+    public static void flushLogAndExit() {
+        if (null != buf) {
+            try {
+                outFile = new File(Config.getLogFile());
+                if (!outFile.exists()) {
+                    outFile.createNewFile();
+                    outFile.setWritable(true,false);
+                }//if (not exists)
+                //create new  PrintWriter from the File with autoflushing using the specified charset
+                out = new PrintWriter(new OutputStreamWriter(new FileOutputStream(outFile,true), Util.getUtf8()), true);
+                out.println(buf.toString());
+                out.close();
+            } catch (IOException ie) {
+                System.out.println ("Error writing to log file " + Config.getLogFile() + ":\n" + ie.toString());
+                System.out.println (buf.toString());
+            }//try-catch
+        }//if(buf)
+        System.exit(1);
+    }//flushLogAndExit()
+
     public static PrintWriter getPrintWriter() {
         return out;
     }//getPrintWriter()
@@ -100,7 +120,7 @@ public class Util {
             try {
                 utf8 = java.nio.charset.Charset.forName("UTF-8");
             } catch (IllegalArgumentException ex) {
-                System.err.println("Critical error upon creating UTF-8 charset: %s" + ex.toString());
+                System.out.println("Critical error upon creating UTF-8 charset: %s" + ex.toString());
                 System.exit(1);
             }//try-catch
         return utf8;

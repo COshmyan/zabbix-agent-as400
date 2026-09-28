@@ -389,20 +389,20 @@ public class ActiveCheck extends ZabbixThread {
                     ret = false;
                 }//try-catch
             }//if(was sent recently)
-	    }//if(buffer empty)
+	      }//if(buffer empty)
 
         if (tryToSend) {
             if (ret) {
                 buffer.items.clear();
                 buffer.pcount = 0;
                 buffer.lastsent_ms = now;
-                if (0 != buffer.first_error) {
+                if (0l != buffer.first_error) {
                     Util.log(Util.LOG_WARNING, " active check data upload to [%s:%d] is working again",
                             serverActive, serverActivePort);
                     buffer.first_error = 0l;
                 }//if
             } else {
-                if (0 == buffer.first_error) {
+                if (0l == buffer.first_error) {
                     Util.log(Util.LOG_WARNING, " active check data upload to [%s:%d] started to fail",
                             serverActive, serverActivePort);
                     buffer.first_error = now;
@@ -745,44 +745,50 @@ public class ActiveCheck extends ZabbixThread {
         Util.log(Util.LOG_INFO,"agent #%d (%s) started [%s #%d]", server_num, orig_serverActive,
                 Thread.currentThread().getName(), server_num + 1);
 
-        while (Config.running) {
+        try {
+            while (Config.running) {
 
-            if (nextsend <= System.currentTimeMillis()) {
-                sendBuffer();
-                nextsend = System.currentTimeMillis() + 1000l;
-            }//if(nextsend)
+                if (nextsend <= System.currentTimeMillis()) {
+                    sendBuffer();
+                    nextsend = System.currentTimeMillis() + 1000l;
+                }//if(nextsend)
 
-            if (nextrefresh <= System.currentTimeMillis()) {
-                if (refreshActiveChecks())
-                    nextrefresh = System.currentTimeMillis() + 
-                                    Config.getRefreshActiveChecks() * 1000; //OK
-                else
-                    nextrefresh = System.currentTimeMillis() + 60000l;      //Fail
-            }//if(nextrefresh)
+                if (nextrefresh <= System.currentTimeMillis()) {
+                    if (refreshActiveChecks())
+                        nextrefresh = System.currentTimeMillis() + 
+                                        Config.getRefreshActiveChecks() * 1000; //OK
+                    else
+                        nextrefresh = System.currentTimeMillis() + 60000l;      //Fail
+                }//if(nextrefresh)
 
-            if (nextcheck <= System.currentTimeMillis() && 
-                                                    Config.getBufferSize() / 2 > buffer.pcount) {
-                processActiveChecks();
-                if (Config.getBufferSize() / 2 <= buffer.pcount) {
-                    //failed to complete processing active checks
-                    continue;
-                }//if
-                nextcheck = getMinNextcheck();
-                if (nextcheck <= 0l)
-                    nextcheck = System.currentTimeMillis() + 60000l;
-            } else {
+                if (nextcheck <= System.currentTimeMillis() && 
+                                                        Config.getBufferSize() / 2 > buffer.pcount) {
+                    processActiveChecks();
+                    if (Config.getBufferSize() / 2 <= buffer.pcount) {
+                        //failed to complete processing active checks
+                        continue;
+                    }//if
+                    nextcheck = getMinNextcheck();
+                    if (nextcheck <= 0l)
+                        nextcheck = System.currentTimeMillis() + 60000l;
+                } else {
 /*
-                if (system.isConnected())
-                    system.disconnectAllServices();
+                    if (system.isConnected())
+                        system.disconnectAllServices();
 */
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException ex) {
-                    Config.running = false;
-                }//try-catch
-            }//if(nextrefresh)
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException ex) {
+                        Config.running = false;
+                    }//try-catch
+                }//if(nextrefresh)
 
-        }//while(main loop)
+            }//while(main loop)
+        } catch (Throwable ex) {
+            //There should not be, but if it's occured - it is critical: stacktrace and stop agent
+            Util.log(Util.LOG_CRITICAL, ex, "Error in ActiveCheck.run():");
+            Config.running = false;
+        }//try-catch
 
         if (system.isConnected())
             system.disconnectAllServices();

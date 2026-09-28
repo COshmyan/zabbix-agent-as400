@@ -98,7 +98,7 @@ class qgyoljob {
     private static final long TIMEOUT_MS = 5000l;//5 seconds
     private static ZbxCache jobTable = new ZbxCache(new JobCacheFiller(), "{#JOB}", "jobTable", TIMEOUT_MS);
 
-    static String process_job_discovery() throws ZbxException {
+    static String process_job_discovery() throws ZbxException, IOException {
         return jobTable.discovery();
     }//process_asp_discovery()
 

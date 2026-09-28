@@ -256,11 +256,10 @@ public class Config {
                 parseConfigLine(mas[0].trim(), mas[1].trim());
             }//for (config file lines)
             i = 0;
-//            setDefaultsAndValidate();
         } catch (IOException|ZbxException ex) {
             ret = false;
-            System.err.printf("Error during config file '%s' processing%s:\n%s\n",
-                config_file_name, (i > 0 ? " (line " + i + "):'" + line +"'" : ""), 
+            Util.log(Util.LOG_CRITICAL,"Error during config file '%s' processing%s:\n%s",
+                config_file_name, (i > 0 ? " (line " + i + "): '" + line +"'" : ""), 
                 (ex instanceof ZbxException ? ex.getMessage() : ex.toString()) );
         } finally {
             if (null != reader)
@@ -327,7 +326,7 @@ public class Config {
                 throw new ZbxException("invalid \"ListenIP\" configuration parameter: '" + ListenIP + "'");
         } catch (ZbxException ex) {
             ret = false;
-            System.err.printf("Error during config file '%s' validation:\n%s\n", config_file_name,
+            Util.log(Util.LOG_CRITICAL,"Error during config file '%s' validation:\n%s\n", config_file_name,
                             ex.getMessage() );
         }//try-catch
         return ret;
