@@ -1,0 +1,948 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 846977d1dfed4968bc5f8bdb363285bc
+      name: 'Templates/Operating systems'
+  templates:
+    - uuid: 5680caa387a74222877714d372b197f0
+      template: 'AS400 by Zabbix Agent'
+      name: 'AS400 by Zabbix Agent'
+      description: 'Template for using with our own "agents"'
+      groups:
+        - name: 'Templates/Operating systems'
+      items:
+        - uuid: 714bb04977f0424fa6df6cd6da1c5c88
+          name: 'Get active threads'
+          key: agent.debug.active.thread
+          delay: 10m
+          value_type: TEXT
+          trends: '0'
+          status: DISABLED
+          description: |
+            This item is used for troubleshooting only; it is disabled by default on the agent's side.
+            To enable it use "AllowKey=" directive in the agent's configuration file.
+          tags:
+            - tag: component
+              value: raw
+        - uuid: a5285ca05e584e4cb4ec87d155c7eb7e
+          name: 'Zabbix agent host name'
+          type: ZABBIX_ACTIVE
+          key: agent.hostname
+          delay: 1h
+          history: 1w
+          value_type: CHAR
+          trends: '0'
+          description: 'Host name of Zabbix agent running.'
+          inventory_link: NAME
+          tags:
+            - tag: component
+              value: system
+          triggers:
+            - uuid: 400c861eb90f4093ba2a274c36a94503
+              expression: 'last(/AS400 by Zabbix Agent/agent.hostname,#1)<>last(/AS400 by Zabbix Agent/agent.hostname,#2)'
+              name: 'Host name of zabbix agent was changed on {HOST.NAME}'
+              priority: INFO
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: 09d0c9bdd38c4c6f9dd3b95a783dc69e
+          name: 'Zabbix agent ping'
+          type: ZABBIX_ACTIVE
+          key: agent.ping
+          history: 1w
+          description: 'The agent always returns 1 for this item. It could be used in combination with nodata() for availability check.'
+          valuemap:
+            name: 'Zabbix agent ping status'
+          tags:
+            - tag: component
+              value: system
+          triggers:
+            - uuid: b44a06fd507849dea22171280a9e6845
+              expression: 'nodata(/AS400 by Zabbix Agent/agent.ping,{$MAX_AGENT_ACTIVE_UNAVAILABLE})=1'
+              name: 'Zabbix agent (active mode) on {HOST.NAME} is unreachable'
+              priority: AVERAGE
+              dependencies:
+                - name: 'Zabbix agent on {HOST.NAME} is unreachable'
+                  expression: 'nodata(/AS400 by Zabbix Agent/system.localtime,{$MAX_AGENT_UNAVAILABLE})=1'
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: a738ddf6b28944be9ea9b30be946f7cc
+          name: 'Version of Zabbix agent running'
+          type: ZABBIX_ACTIVE
+          key: agent.version
+          delay: 1h
+          history: 1w
+          value_type: CHAR
+          trends: '0'
+          tags:
+            - tag: component
+              value: application
+          triggers:
+            - uuid: 64a889956ae94d958ffaa897e93dd587
+              expression: 'last(/AS400 by Zabbix Agent/agent.version,#1)<>last(/AS400 by Zabbix Agent/agent.version,#2)'
+              name: 'Version of zabbix agent was changed on {HOST.NAME}'
+              priority: INFO
+              tags:
+                - tag: scope
+                  value: notice
+        - uuid: e06cf6fc22504007808a30c67ee8c389
+          name: 'Get disk data'
+          type: ZABBIX_ACTIVE
+          key: as400.disk.get
+          delay: 5m
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'The `as400.disk.get` key acquires raw information set about the disk devices. Later to be extracted by preprocessing in dependent items.'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: cf933a2a02b74989914e4bf8113dd0d4
+          name: 'Size of output queue QEZDEBUG in library QUSRSYS'
+          type: ZABBIX_ACTIVE
+          key: 'as400.outputqueue.size[QEZDEBUG,QUSRSYS]'
+          delay: 15m
+          history: 1w
+          description: 'Number of spool files in this output queue.'
+          tags:
+            - tag: component
+              value: os
+          triggers:
+            - uuid: e67f444fdc2048a9ae50ab92ff73754b
+              expression: 'last(/AS400 by Zabbix Agent/as400.outputqueue.size[QEZDEBUG,QUSRSYS])>{$MAX_QEZ_SIZE}'
+              name: 'Output queue QEZDEBUG has a lot of spool files (above {$MAX_QEZ_SIZE})'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: notice
+                - tag: scope
+                  value: performance
+            - uuid: 4522eaafcb7c49b4b03a449514018b1b
+              expression: 'count(/AS400 by Zabbix Agent/as400.outputqueue.size[QEZDEBUG,QUSRSYS],20m)>1 and change(/AS400 by Zabbix Agent/as400.outputqueue.size[QEZDEBUG,QUSRSYS])>{$MAX_QEZ_INCREASE}'
+              name: 'Output queue QEZDEBUG is growing too fast (above {$MAX_QEZ_INCREASE} in 15m)'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: notice
+                - tag: scope
+                  value: performance
+        - uuid: 878a93ed63424198bd45f347a86714ca
+          name: 'Size of output queue QEZJOBLOG in library QUSRSYS'
+          type: ZABBIX_ACTIVE
+          key: 'as400.outputqueue.size[QEZJOBLOG,QUSRSYS]'
+          delay: 15m
+          history: 1w
+          tags:
+            - tag: component
+              value: os
+          triggers:
+            - uuid: 88d46ff44f2c4430943adf53f29388ff
+              expression: 'last(/AS400 by Zabbix Agent/as400.outputqueue.size[QEZJOBLOG,QUSRSYS])>{$MAX_QEZ_SIZE}'
+              name: 'Output queue QEZJOBLOG has a lot of spool files (above {$MAX_QEZ_SIZE})'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: notice
+                - tag: scope
+                  value: performance
+            - uuid: 7a49e0bd1dca4aa78522206052192aaf
+              expression: 'count(/AS400 by Zabbix Agent/as400.outputqueue.size[QEZJOBLOG,QUSRSYS],20m)>1 and change(/AS400 by Zabbix Agent/as400.outputqueue.size[QEZJOBLOG,QUSRSYS])>{$MAX_QEZ_INCREASE}'
+              name: 'Output queue QEZJOBLOG is growing too fast (above {$MAX_QEZ_INCREASE} in 15m)'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: notice
+                - tag: scope
+                  value: performance
+        - uuid: 50ace9b38e9c465ab54515cc05879ef4
+          name: 'Size of output queue QPRINT in library QGPL'
+          type: ZABBIX_ACTIVE
+          key: 'as400.outputqueue.size[QPRINT,QGPL]'
+          delay: 15m
+          history: 1w
+          tags:
+            - tag: component
+              value: os
+          triggers:
+            - uuid: 533e8045c6924f468f9c9220025f7b4a
+              expression: 'last(/AS400 by Zabbix Agent/as400.outputqueue.size[QPRINT,QGPL])>{$MAX_QPRINT_SIZE}'
+              name: 'Output queue QPRINT has a lot of spool files (above {$MAX_QPRINT_SIZE})'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: notice
+                - tag: scope
+                  value: performance
+        - uuid: a5d979feb1a74e9594cabb0f3b00983e
+          name: 'Services availability'
+          type: ZABBIX_ACTIVE
+          key: as400.services
+          delay: 5m
+          history: 1w
+          description: 'Checks if all AS/400 services are available.'
+          tags:
+            - tag: component
+              value: os
+        - uuid: fb9bf4aa468742ea8b98b89a46b43c13
+          name: 'Debug: ActiveCount'
+          type: DEPENDENT
+          key: debug.ActiveCount
+          delay: '0'
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - ActiveCount=(\d+)
+                - \1
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: agent.debug.active.thread
+          tags:
+            - tag: test
+              value: debug
+        - uuid: f35bbeec92eb4b4d84ba4f5a21b33f7c
+          name: 'Debug: Memory (free)'
+          type: DEPENDENT
+          key: 'debug.memory[free]'
+          delay: '0'
+          units: B
+          description: 'Amount of memory returned by `Runtime.freeMemory()` call.'
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'Memory \(max/total/free\): (\d+)/(\d+)/(\d+)'
+                - \3
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: agent.debug.active.thread
+          tags:
+            - tag: test
+              value: debug
+        - uuid: 525a2ba0c3c34166a74cdb9568c4f605
+          name: 'Debug: Memory (max)'
+          type: DEPENDENT
+          key: 'debug.memory[max]'
+          delay: '0'
+          units: B
+          description: 'Amount of memory returned by `Runtime.maxMemory()` call.'
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'Memory \(max/total/free\): (\d+)/(\d+)/(\d+)'
+                - \1
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: agent.debug.active.thread
+          tags:
+            - tag: test
+              value: debug
+        - uuid: e4e900ebee5f4417b6cdeb0db971a88b
+          name: 'Debug: Memory (total)'
+          type: DEPENDENT
+          key: 'debug.memory[total]'
+          delay: '0'
+          units: B
+          description: 'Amount of memory returned by `Runtime.totalMemory()` call.'
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'Memory \(max/total/free\): (\d+)/(\d+)/(\d+)'
+                - \2
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: agent.debug.active.thread
+          tags:
+            - tag: test
+              value: debug
+        - uuid: ee1ee82905af407abaa1015f6545aaa7
+          name: 'Debug: Timeouts count'
+          type: DEPENDENT
+          key: debug.timeoutCount
+          delay: '0'
+          preprocessing:
+            - type: REGEX
+              parameters:
+                - 'Timeout count=(\d+)'
+                - \1
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: agent.debug.active.thread
+          tags:
+            - tag: test
+              value: debug
+        - uuid: c5edab51f931469da8fbddb2a761a214
+          name: 'Messages in the queue QSYSOPR (errors)'
+          type: ZABBIX_ACTIVE
+          key: 'eventlog[QSYSOPR,,70,,,100,skip]'
+          delay: 5s
+          history: 1w
+          value_type: LOG
+          trends: '0'
+          description: 'Error messages in the QSYSOPR queue.'
+          tags:
+            - tag: component
+              value: os
+          triggers:
+            - uuid: 676843b983af4dd7a91aa7f8390cea95
+              expression: 'nodata(/AS400 by Zabbix Agent/eventlog[QSYSOPR,,70,,,100,skip],3d)<>1 and find(/AS400 by Zabbix Agent/eventlog[QSYSOPR,,70,,,100,skip],,"regexp","^(CPPEA02|CPI0949) ")=1'
+              name: 'New critical message in AS400 message queue'
+              priority: HIGH
+              manual_close: 'YES'
+              tags:
+                - tag: scope
+                  value: notice
+            - uuid: 7a26b71f3e33418eb80dac6c488f37fa
+              expression: '(find(/AS400 by Zabbix Agent/eventlog[QSYSOPR,,70,,,100,skip],,"regexp","^CPPEA33 ")=1 or (logsource(/AS400 by Zabbix Agent/eventlog[QSYSOPR,,70,,,100,skip],,"^OVERRIDE$")=0 and find(/AS400 by Zabbix Agent/eventlog[QSYSOPR,,70,,,100,skip],,"regexp","^(CPA5201|CPA7025|CPI096E|CPI5906|CPF8198|CPF9E7E|CPF9E7D) ")=0))'
+              name: 'New error message in AS400 message queue'
+              priority: AVERAGE
+              type: MULTIPLE
+              manual_close: 'YES'
+              tags:
+                - tag: close
+                  value: auto
+                - tag: scope
+                  value: notice
+            - uuid: 5c0c300d8b6b4be7bb42548aa99a99d9
+              expression: 'logsource(/AS400 by Zabbix Agent/eventlog[QSYSOPR,,70,,,100,skip],,"^QCLNSYSLOG$")=0 and find(/AS400 by Zabbix Agent/eventlog[QSYSOPR,,70,,,100,skip],,"regexp","^CPA7025 ")=1'
+              name: 'New warning message in AS400 message queue'
+              priority: WARNING
+              type: MULTIPLE
+              manual_close: 'YES'
+              tags:
+                - tag: close
+                  value: auto
+                - tag: scope
+                  value: notice
+        - uuid: 0390605a6ec6499ea27096da52dc673f
+          name: 'Get jobs data'
+          type: ZABBIX_ACTIVE
+          key: 'proc.cpu.util.get[{$MAX_CPU_FOR_DISCOVERY},avg1]'
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'The `proc.cpu.util.get` key acquires raw information set about the jobs that use a lot of CPU. Later to be extracted by preprocessing in dependent items.'
+          tags:
+            - tag: component
+              value: raw
+        - uuid: f6377e60a1864e5db24339728880f72a
+          name: 'CPU Usage for all process'
+          type: ZABBIX_ACTIVE
+          key: 'proc.cpu.util[,,total,,,]'
+          history: 1w
+          value_type: FLOAT
+          units: '%'
+          tags:
+            - tag: component
+              value: cpu
+        - uuid: 7ed23551862c46aba4e205e1996a3049
+          name: 'Number of jobs in state LCKW'
+          type: ZABBIX_ACTIVE
+          key: 'proc.num[,,LCKW,]'
+          delay: 5m
+          history: 1w
+          tags:
+            - tag: component
+              value: os
+          triggers:
+            - uuid: 980143bd701b4616929486f49ec31a94
+              expression: 'min(/AS400 by Zabbix Agent/proc.num[,,LCKW,],#2)>0'
+              name: 'There are jobs in state LCKW'
+              priority: WARNING
+              tags:
+                - tag: scope
+                  value: performance
+        - uuid: 9173eaf0b280429c8f65447d545be36d
+          name: 'Number of running jobs (total)'
+          type: ZABBIX_ACTIVE
+          key: 'proc.num[,,run]'
+          delay: 5m
+          history: 1w
+          tags:
+            - tag: component
+              value: os
+        - uuid: 0355305040584113aac1e065ba3b9c2f
+          name: 'System FQDN'
+          type: ZABBIX_ACTIVE
+          key: 'system.hostname[fqdn,lower]'
+          delay: 1d
+          history: 2w
+          value_type: CHAR
+          trends: '0'
+          tags:
+            - tag: component
+              value: system
+        - uuid: 22b425c8a3fb4b4fbff05363be3342fc
+          name: 'Host local time'
+          key: system.localtime
+          history: 1w
+          units: unixtime
+          description: 'The local system time of the host.'
+          tags:
+            - tag: component
+              value: os
+          triggers:
+            - uuid: 19c4390550fe44d2afbf3aeff61126e4
+              expression: 'fuzzytime(/AS400 by Zabbix Agent/system.localtime,{$MAX_TIME_DIFF})=0'
+              name: 'Time is differs more than {$MAX_TIME_DIFF} seconds!'
+              priority: AVERAGE
+              tags:
+                - tag: scope
+                  value: availability
+            - uuid: 35b44628825d426b9f1d82f4d1c76cdd
+              expression: 'nodata(/AS400 by Zabbix Agent/system.localtime,{$MAX_AGENT_UNAVAILABLE})=1'
+              name: 'Zabbix agent on {HOST.NAME} is unreachable'
+              priority: HIGH
+              tags:
+                - tag: scope
+                  value: availability
+        - uuid: 9243ee2d162a4a428b5e12fb6e6156a8
+          name: 'System information'
+          key: system.uname
+          delay: 1d
+          history: 1w
+          value_type: CHAR
+          trends: '0'
+          description: 'Information about operating system.'
+          tags:
+            - tag: component
+              value: os
+        - uuid: 6820d5063cea4042b0bf5a4ce11b47f9
+          name: 'System uptime'
+          type: ZABBIX_ACTIVE
+          key: system.uptime
+          history: 2w
+          units: uptime
+          tags:
+            - tag: component
+              value: os
+        - uuid: 371c16fb9c124a308f7af8f5f9587ccd
+          name: 'Number of users'
+          type: ZABBIX_ACTIVE
+          key: system.users.num
+          history: 1w
+          description: 'The number of users who are currently logged in.'
+          tags:
+            - tag: component
+              value: os
+        - uuid: b284f3c2fad3453bb7ade2952ed8438f
+          name: 'Get ASP data'
+          type: ZABBIX_ACTIVE
+          key: vfs.fs.get
+          delay: 5m
+          history: 1h
+          value_type: TEXT
+          trends: '0'
+          description: 'The `vfs.fs.get` key acquires raw information set about ASP''s. Later to be extracted by preprocessing in dependent items.'
+          tags:
+            - tag: component
+              value: raw
+      discovery_rules:
+        - uuid: 531fb55aa85a49fbadaeba5febd4120b
+          name: 'Disks discovery (dependent)'
+          type: DEPENDENT
+          key: as400.disk.dependent.discovery
+          delay: '0'
+          lifetime: 1w
+          enabled_lifetime_type: DISABLE_AFTER
+          enabled_lifetime: 1h
+          description: 'The discovery of disks.'
+          item_prototypes:
+            - uuid: c1f5674c3558477fb625513618d73ce7
+              name: 'Disk {#DSK_ID}: {#DSK_NAME} free space'
+              type: DEPENDENT
+              key: 'as400.disk.dependent.size[{#DSK_SN},free]'
+              delay: '0'
+              history: 1w
+              units: B
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.bytes.free
+              master_item:
+                key: 'as400.disk.dependent[{#DSK_SN},data]'
+              tags:
+                - tag: class
+                  value: storage
+                - tag: disk
+                  value: '{#DSK_NAME}'
+            - uuid: 68241618636c45b4ba9babead36248fb
+              name: 'Disk {#DSK_ID}: {#DSK_NAME} free space, %'
+              type: DEPENDENT
+              key: 'as400.disk.dependent.size[{#DSK_SN},pfree]'
+              delay: '0'
+              history: 1w
+              value_type: FLOAT
+              units: '%'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.bytes.pfree
+              master_item:
+                key: 'as400.disk.dependent[{#DSK_SN},data]'
+              tags:
+                - tag: class
+                  value: storage
+                - tag: disk
+                  value: '{#DSK_NAME}'
+            - uuid: a3114a2df2804c05a17dcf9f16b38c01
+              name: 'Disk {#DSK_ID}: {#DSK_NAME} used space, %'
+              type: DEPENDENT
+              key: 'as400.disk.dependent.size[{#DSK_SN},pused]'
+              delay: '0'
+              history: 1w
+              value_type: FLOAT
+              units: '%'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.bytes.pused
+              master_item:
+                key: 'as400.disk.dependent[{#DSK_SN},data]'
+              tags:
+                - tag: class
+                  value: storage
+                - tag: disk
+                  value: '{#DSK_NAME}'
+            - uuid: f270f1af1aa54566aea03b208551ecdd
+              name: 'Disk {#DSK_ID}: {#DSK_NAME} capacity'
+              type: DEPENDENT
+              key: 'as400.disk.dependent.size[{#DSK_SN},total]'
+              delay: '0'
+              history: 1w
+              units: B
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.bytes.total
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'as400.disk.dependent[{#DSK_SN},data]'
+              tags:
+                - tag: class
+                  value: storage
+                - tag: disk
+                  value: '{#DSK_NAME}'
+            - uuid: 60ec2afad1df4e35827f07fafaa12df1
+              name: 'Disk {#DSK_ID}: {#DSK_NAME} used space'
+              type: DEPENDENT
+              key: 'as400.disk.dependent.size[{#DSK_SN},used]'
+              delay: '0'
+              history: 1w
+              units: B
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.bytes.used
+              master_item:
+                key: 'as400.disk.dependent[{#DSK_SN},data]'
+              tags:
+                - tag: class
+                  value: storage
+                - tag: disk
+                  value: '{#DSK_NAME}'
+            - uuid: 0cf7d6b99859415085a2489706a7bbdf
+              name: 'Disk {#DSK_ID}: {#DSK_NAME} ({#DSK_TYPE} {#DSK_MODEL}, {#DSK_SN}) status'
+              type: DEPENDENT
+              key: 'as400.disk.dependent.state[{#DSK_SN}]'
+              delay: '0'
+              history: 1w
+              valuemap:
+                name: 'AS400 disk status'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.state
+              master_item:
+                key: 'as400.disk.dependent[{#DSK_SN},data]'
+              tags:
+                - tag: class
+                  value: storage
+                - tag: disk
+                  value: '{#DSK_NAME}'
+              trigger_prototypes:
+                - uuid: a883a9e73c964867b907fe609e8d500a
+                  expression: 'last(/AS400 by Zabbix Agent/as400.disk.dependent.state[{#DSK_SN}])<>1 and last(/AS400 by Zabbix Agent/as400.disk.dependent.state[{#DSK_SN}])<>4294967295'
+                  name: 'Disk {#DSK_ID}: {#DSK_NAME} ({#DSK_TYPE} {#DSK_MODEL}, {#DSK_SN}) failed'
+                  priority: AVERAGE
+                  tags:
+                    - tag: scope
+                      value: availability
+            - uuid: 5a786f1ec3dd45fdbd23226065740a67
+              name: 'Disk [{#DSK_SN}]: Get data'
+              type: DEPENDENT
+              key: 'as400.disk.dependent[{#DSK_SN},data]'
+              delay: '0'
+              history: '0'
+              value_type: TEXT
+              trends: '0'
+              description: 'Intermediate data of `{#DSK_SN}` disk.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.[?(@.dsk_sn==''{#DSK_SN}'')].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: as400.disk.get
+              tags:
+                - tag: class
+                  value: storage
+                - tag: component
+                  value: raw
+                - tag: disk
+                  value: '{#DSK_SN}'
+          master_item:
+            key: as400.disk.get
+          lld_macro_paths:
+            - lld_macro: '{#DSK_ASP}'
+              path: $.dsk_asp
+            - lld_macro: '{#DSK_ID}'
+              path: $.dsk_id
+            - lld_macro: '{#DSK_MODEL}'
+              path: $.dsk_model
+            - lld_macro: '{#DSK_NAME}'
+              path: $.dsk_name
+            - lld_macro: '{#DSK_SN}'
+              path: $.dsk_sn
+            - lld_macro: '{#DSK_TYPE}'
+              path: $.dsk_type
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var value_json = JSON.parse (value, function (k, v) {
+                    if (['bytes','state'].indexOf(k) < 0) {
+                      return v;
+                    }
+                  }
+                  );
+                  return JSON.stringify(value_json);
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+        - uuid: b368ac7c38164de09fc6ee590d67ccff
+          name: 'Jobs discovery (dependent)'
+          type: DEPENDENT
+          key: 'proc.cpu.util.dependent.discovery[{$MAX_CPU_FOR_DISCOVERY}]'
+          delay: '0'
+          lifetime: 1d
+          enabled_lifetime_type: DISABLE_AFTER
+          enabled_lifetime: 1h
+          description: 'Discovery of jobs that consume significant amount of CPU.'
+          item_prototypes:
+            - uuid: 9d629125f91240e6ae01991c9db5b6eb
+              name: 'CPU Usage by job {#NUM}/{#USER}/{#NAME}'
+              type: DEPENDENT
+              key: 'proc.cpu.dependent.util[{#NAME},{#USER},{#NUM}]'
+              delay: '0'
+              history: 1w
+              value_type: FLOAT
+              units: '%'
+              description: 'Percentage of time the specified job used the CPU during the last minute.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.[?(@.num==''{#NUM}'' && @.user == ''{#USER}'' && @.name == ''{#NAME}'')].usage.first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: 'proc.cpu.util.get[{$MAX_CPU_FOR_DISCOVERY},avg1]'
+              tags:
+                - tag: component
+                  value: os
+                - tag: process
+                  value: '{#NUM}/{#USER}/{#NAME}'
+              trigger_prototypes:
+                - uuid: ba407a6e17974c9692443dab6f1dbcb8
+                  expression: 'count(/AS400 by Zabbix Agent/proc.cpu.dependent.util[{#NAME},{#USER},{#NUM}],#6,"ge","{$MAX_CPU_PER_PROCESS_PUSED}")=6'
+                  name: 'Job {#NUM}/{#USER}/{#NAME} has large CPU usage (>{$MAX_CPU_PER_PROCESS_PUSED}%)'
+                  priority: WARNING
+                  tags:
+                    - tag: scope
+                      value: performance
+          master_item:
+            key: 'proc.cpu.util.get[{$MAX_CPU_FOR_DISCOVERY},avg1]'
+          lld_macro_paths:
+            - lld_macro: '{#NAME}'
+              path: $.name
+            - lld_macro: '{#NUM}'
+              path: $.num
+            - lld_macro: '{#USER}'
+              path: $.user
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var value_json = JSON.parse (value, function (k, v) {
+                    if ('usage' !== k) {
+                      return v;
+                    }
+                  }
+                  );
+                  return JSON.stringify(value_json);
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+        - uuid: a3d80a59df454509af2174dad846d634
+          name: 'ASP discovery (dependent)'
+          type: DEPENDENT
+          key: vfs.fs.dependent.discovery
+          delay: '0'
+          lifetime: 1w
+          enabled_lifetime_type: DISABLE_AFTER
+          enabled_lifetime: 1d
+          description: 'The discovery of ASP''s.'
+          item_prototypes:
+            - uuid: 54f911600a974f5e9984be6fffccffe2
+              name: 'ASP{#FSNAME}: Space: Available'
+              type: DEPENDENT
+              key: 'vfs.fs.dependent.size[{#FSNAME},free]'
+              delay: '0'
+              history: 1w
+              units: B
+              description: 'Available storage space expressed in bytes.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.bytes.free
+              master_item:
+                key: 'vfs.fs.dependent[{#FSNAME},data]'
+              tags:
+                - tag: asp
+                  value: '{#FSNAME}'
+                - tag: component
+                  value: storage
+            - uuid: 57b7a3365d214ad1b291a43a19995a91
+              name: 'ASP{#FSNAME}: Space: Available, in %'
+              type: DEPENDENT
+              key: 'vfs.fs.dependent.size[{#FSNAME},pfree]'
+              delay: '0'
+              history: 1w
+              value_type: FLOAT
+              units: '%'
+              description: 'Calculated as the percentage of currently available space compared to the maximum available space.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.bytes.pfree
+              master_item:
+                key: 'vfs.fs.dependent[{#FSNAME},data]'
+              tags:
+                - tag: asp
+                  value: '{#FSNAME}'
+                - tag: component
+                  value: storage
+            - uuid: e4104b0981154102b9d0aade965b9eb5
+              name: 'ASP{#FSNAME}: Space: Used, in %'
+              type: DEPENDENT
+              key: 'vfs.fs.dependent.size[{#FSNAME},pused]'
+              delay: '0'
+              history: 1w
+              value_type: FLOAT
+              units: '%'
+              description: 'Calculated as the percentage of currently used space compared to the maximum available space.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.bytes.pused
+              master_item:
+                key: 'vfs.fs.dependent[{#FSNAME},data]'
+              tags:
+                - tag: asp
+                  value: '{#FSNAME}'
+                - tag: component
+                  value: storage
+            - uuid: 3e069ce326214d628a98d13ea7856d75
+              name: 'ASP{#FSNAME}: Space: Total'
+              type: DEPENDENT
+              key: 'vfs.fs.dependent.size[{#FSNAME},total]'
+              delay: '0'
+              history: 1w
+              units: B
+              description: 'Total space expressed in bytes.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.bytes.total
+                - type: DISCARD_UNCHANGED_HEARTBEAT
+                  parameters:
+                    - 1h
+              master_item:
+                key: 'vfs.fs.dependent[{#FSNAME},data]'
+              tags:
+                - tag: asp
+                  value: '{#FSNAME}'
+                - tag: component
+                  value: storage
+            - uuid: e1fea4af00a443e184a96d6e2d3d495e
+              name: 'ASP{#FSNAME}: Space: Used'
+              type: DEPENDENT
+              key: 'vfs.fs.dependent.size[{#FSNAME},used]'
+              delay: '0'
+              history: 1w
+              units: B
+              description: 'Used storage expressed in bytes.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.bytes.used
+              master_item:
+                key: 'vfs.fs.dependent[{#FSNAME},data]'
+              tags:
+                - tag: asp
+                  value: '{#FSNAME}'
+                - tag: component
+                  value: storage
+            - uuid: 1d17156b080e4f98889a59696b09a786
+              name: 'ASP{#FSNAME}: status'
+              type: DEPENDENT
+              key: 'vfs.fs.dependent.state[{#FSNAME}]'
+              delay: '0'
+              history: 1w
+              valuemap:
+                name: 'AS400 ASP status'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - $.state
+              master_item:
+                key: 'vfs.fs.dependent[{#FSNAME},data]'
+              tags:
+                - tag: asp
+                  value: '{#FSNAME}'
+                - tag: component
+                  value: storage
+            - uuid: b162964b37f74d61a628cb00bfc8f4f9
+              name: 'ASP [{#FSNAME}]: Get data'
+              type: DEPENDENT
+              key: 'vfs.fs.dependent[{#FSNAME},data]'
+              delay: '0'
+              history: '0'
+              value_type: TEXT
+              trends: '0'
+              description: 'Intermediate data of `{#FSNAME}` ASP.'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$.[?(@.fsname==''{#FSNAME}'')].first()'
+                  error_handler: DISCARD_VALUE
+              master_item:
+                key: vfs.fs.get
+              tags:
+                - tag: asp
+                  value: '{#FSNAME}'
+                - tag: component
+                  value: raw
+                - tag: component
+                  value: storage
+          trigger_prototypes:
+            - uuid: d6093f2a63ea43cdbd1074278f192615
+              expression: 'min(/AS400 by Zabbix Agent/vfs.fs.dependent.size[{#FSNAME},pused],#2)>{$MAX_DISK_PUSED:"{#FSNAME}"} and count(/AS400 by Zabbix Agent/vfs.fs.dependent.state[{#FSNAME}],#2,"regexp","^(1|2)$")=0'
+              name: 'ASP{#FSNAME} used more than {$MAX_DISK_PUSED:"{#FSNAME}"}%'
+              priority: AVERAGE
+              tags:
+                - tag: scope
+                  value: capacity
+          master_item:
+            key: vfs.fs.get
+          lld_macro_paths:
+            - lld_macro: '{#FSNAME}'
+              path: $.fsname
+            - lld_macro: '{#FSTYPE}'
+              path: $.fstype
+          preprocessing:
+            - type: JAVASCRIPT
+              parameters:
+                - |
+                  var value_json = JSON.parse (value, function (k, v) {
+                    if (['bytes','state'].indexOf(k) < 0) {
+                      return v;
+                    }
+                  }
+                  );
+                  return JSON.stringify(value_json);
+            - type: DISCARD_UNCHANGED_HEARTBEAT
+              parameters:
+                - 1h
+      tags:
+        - tag: class
+          value: os
+        - tag: target
+          value: as400
+      macros:
+        - macro: '{$MAX_AGENT_ACTIVE_UNAVAILABLE}'
+          value: 10m
+          description: 'Threshold for Zabbix agent (active mode) unavailability'
+        - macro: '{$MAX_AGENT_UNAVAILABLE}'
+          value: 5m
+          description: 'Threshold for Zabbix agent (passive mode) unavailability'
+        - macro: '{$MAX_CPU_FOR_DISCOVERY}'
+          value: 30s
+          description: 'Jobs that consumed this amount of CPU time will be discovered for monitoring'
+        - macro: '{$MAX_CPU_PER_PROCESS_PUSED}'
+          value: '30'
+          description: 'Threshold for CPU usage by a separate job (percentage)'
+        - macro: '{$MAX_DISK_PUSED}'
+          value: '65'
+          description: 'Threshold for ASP usage (percentage)'
+        - macro: '{$MAX_QEZ_INCREASE}'
+          value: '400'
+        - macro: '{$MAX_QEZ_SIZE}'
+          value: '50000'
+        - macro: '{$MAX_QPRINT_SIZE}'
+          value: '15000'
+        - macro: '{$MAX_TIME_DIFF}'
+          value: '120'
+          description: 'Threshold for system clock discrepancy (in seconds)'
+      valuemaps:
+        - uuid: 84ee5b15fa924c2f9994364825016600
+          name: 'AS400 ASP status'
+          mappings:
+            - value: '0'
+              newvalue: 'no status'
+            - value: '1'
+              newvalue: varyoff
+            - value: '2'
+              newvalue: varyon
+            - value: '3'
+              newvalue: active
+            - value: '4'
+              newvalue: available
+        - uuid: e5abc3ac1e3241ba8c738651e9f3bb6c
+          name: 'AS400 disk status'
+          mappings:
+            - value: '0'
+              newvalue: 'There is no unit control value'
+            - value: '1'
+              newvalue: 'The disk unit is active'
+            - value: '2'
+              newvalue: 'The disk unit has failed'
+            - value: '3'
+              newvalue: 'Some other disk unit in the disk subsystem has failed'
+            - value: '4'
+              newvalue: 'Hardware failure (affects performance, but not the function)'
+            - value: '5'
+              newvalue: 'Hardware failure (does not affect the function or performance)'
+            - value: '6'
+              newvalue: 'The disk unit''s parity protection is being rebuilt'
+            - value: '7'
+              newvalue: 'The disk unit is not ready'
+            - value: '8'
+              newvalue: 'The disk unit is write protected'
+            - value: '9'
+              newvalue: 'The disk unit is busy'
+            - value: '10'
+              newvalue: 'The disk unit is not operational'
+            - value: '11'
+              newvalue: 'The disk unit has returned a status that is not recognizable'
+            - value: '12'
+              newvalue: 'The disk unit cannot be accessed'
+            - value: '13'
+              newvalue: 'The disk unit is read/write protected'
+            - value: '4294967295'
+              newvalue: 'Not configured or not attached'
+        - uuid: bf5d10adaaee415391e2536a7e1dac70
+          name: 'Zabbix agent ping status'
+          mappings:
+            - value: '1'
+              newvalue: Up
