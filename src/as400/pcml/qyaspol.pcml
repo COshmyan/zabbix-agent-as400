@@ -1,0 +1,148 @@
+<pcml version="1.0">
+
+  <struct name="filter">
+    <data name="size"     type="int" length="4" init="16" />
+    <data name="key"      type="int" length="4" init="1"  />
+    <data name="datasize" type="int" length="4" init="4"  />
+    <data name="data"     type="int" length="4" init="-1"  />
+  </struct>
+
+  <struct name="yasp0100" outputsize ="listInfo.rcdLength">
+    <data name="aspNum"     type="int"  length="4"  />
+    <data name="rsrcName"   type="char" length="10" />
+    <data name="devDesc"    type="char" length="10" />
+    <data name="version"    type="int"  length="4"  />
+    <data name="aspUsage"   type="int"  length="4"  />
+    <data name="aspStatus"  type="int"  length="4"  />
+    <data name="dbName"     type="char" length="18" />
+    <data name="aspResName" type="char" length="10" />
+  </struct>
+
+  <struct name="yasp0200" outputsize ="listInfo.rcdLength">
+    <data name="aspNum"                          type="int"  length="4" />
+    <data name="dskNum"                          type="int"  length="4" />
+    <data name="aspCapacityTotal"                type="int"  length="4" />
+    <data name="aspCapacityAvailableTotal"       type="int"  length="4" />
+    <data name="aspCapacityProtected"            type="int"  length="4" />
+    <data name="aspCapacityAvailableProtected"   type="int"  length="4" />
+    <data name="aspCapacityUnprotected"          type="int"  length="4" />
+    <data name="aspCapacityAvailableUnprotected" type="int"  length="4" />
+    <data name="aspSystemStorage"                type="int"  length="4" />
+    <data name="overflowStorage"                 type="int"  length="4" />
+    <data name="allocatedToErrorLog"             type="int"  length="4" />
+    <data name="allocatedToMachineLog"           type="int"  length="4" />
+    <data name="allocatedToMachineTrace"         type="int"  length="4" />
+    <data name="allocatedToMainStorageDump"      type="int"  length="4" />
+    <data name="allocatedToMicrocode"            type="int"  length="4" />
+    <data name="storageThresholdPercentage"      type="int"  length="4" />
+    <data name="aspType"                         type="char" length="2" />
+    <data name="overflowRecoveryResult"          type="char" length="1" />
+    <data name="endImmediateControl"             type="char" length="1" />
+    <data name="compressionRecoveryPolicy"       type="char" length="1" />
+    <data name="compressedDiskUnits"             type="char" length="1" />
+    <data name="balanceStatus"                   type="char" length="1" />
+    <data name="balanceType"                     type="char" length="1" />
+    <data name="balanceTimestamp"                type="char" length="13"/>
+    <data                                        type="char" length="3" />
+    <data name="balanceDataMoved"                type="int"  length="4" />
+    <data name="balanceDataRemaining"            type="int"  length="4" />
+    <data name="traceDuration"                   type="int"  length="4" />
+    <data name="traceStatus"                     type="char" length="1" />
+    <data name="traceTimestamp"                  type="char" length="13"/>
+    <data name="changesWrittenToDisk"            type="char" length="1" />
+    <data                                        type="char" length="1" />
+    <data name="multipleConnDiskUnitsNum"        type="int"  length="4" />
+    <data name="geoMirrorRole"                   type="int"  length="4" />
+    <data name="geoMirrorCopyState"              type="int"  length="4" />
+    <data name="geoMirrorCopyDataState"          type="int"  length="4" />
+    <data name="geoMirrorPerfMode"               type="int"  length="4" />
+    <data name="geoMirrorResumePriority"         type="int"  length="4" />
+    <data name="geoMirrorSuspendTimeout"         type="int"  length="4" />
+    <data name="DiskUnitPresence"                type="int"  length="4" />
+  </struct>
+
+  <struct name="yasp0300" outputsize ="listInfo.rcdLength">
+    <data name="aspNum"                          type="int"  length="4" />
+    <data name="diskType"                        type="char" length="4" />
+    <data name="diskModel"                       type="char" length="4" />
+    <data name="diskSerial"                      type="char" length="10"/>
+    <data name="resName"                         type="char" length="10"/>
+    <data name="diskUnitNo"                      type="int"  length="4" />
+    <data name="diskCapacity"                    type="int"  length="4" />
+    <data name="diskStorageAvailable"            type="int"  length="4" />
+    <data name="diskStorageReserved"             type="int"  length="4" />
+    <data name="mirroredUnitProtected"           type="char" length="1" />
+    <data name="mirroredUnitReported"            type="char" length="1" />
+    <data name="mirroredUnitStatus"              type="char" length="1" />
+    <data name="raidType"                        type="char" length="1" />
+    <data name="unitControl"                     type="int"  length="4" />
+    <data name="blocksTransferredTo"             type="int"  length="4" />
+    <data name="blocksTransferredFrom"           type="int"  length="4" />
+    <data name="requestsForTransferTo"           type="int"  length="4" />
+    <data name="requestsForTransferFrom"         type="int"  length="4" />
+    <data name="permanentBlocksTransferred"      type="int"  length="4" />
+    <data name="requestsForPermanentTransfer"    type="int"  length="4" />
+    <data name="sampleCount"                     type="int"  length="4" />
+    <data name="notBusyCount"                    type="int"  length="4" />
+    <data name="compressionStatus"               type="char" length="1" />
+    <data name="diskProtectionType"              type="char" length="1" />
+    <data name="compressedUnit"                  type="char" length="1" />
+    <data name="storageAllocationRestrictedUnit" type="char" length="1" />
+    <data name="availabilityParitySetUnit"       type="char" length="1" />
+    <data name="multipleConnectionUnit"          type="char" length="1" />
+    <data                                        type="char" length="2" />
+  </struct>
+
+  <struct name="listInfo" outputsize="80">
+    <data name="totalRcds"    type="int"  length="4" />
+    <data name="rcdsReturned" type="int"  length="4" />
+    <data name="rqsHandle"    type="byte" length="4" />
+    <data name="rcdLength"    type="int"  length="4" />
+    <data name="infoComplete" type="char" length="1" />
+    <data name="dateCreated"  type="char" length="7" />
+    <data name="timeCreated"  type="char" length="6" />
+    <data name="listStatus"   type="char" length="1" />
+    <data                     type="byte" length="1" />
+    <data name="lengthOfInfo" type="int"  length="4" />
+    <data name="firstRecord"  type="int"  length="4" />
+    <data                     type="byte" length="40" />
+  </struct>
+
+  <!-- <program name="qyaspol" path="/QSYS.lib/QGY.lib/qyaspol.pgm" parseorder="listInfo receiver"> -->
+  <program name="qyaspol-yasp0100" path="/QSYS.LIB/qyaspol.pgm" parseorder="listInfo receiver">
+    <data name="receiver"       type="struct" struct="yasp0100" usage="output"
+        count="listInfo.rcdsReturned" outputsize="receiverlength" />
+    <data name="receiverlength" type="int"    length="4"        usage="input" init="16384" />
+    <data name="listInfo"       type="struct" struct="listInfo" usage="output" />
+    <data name="nbrrcd"         type="int"    length="4"        usage="input" init="-1" />
+    <data name="nbrfilter"      type="int"    length="4"        usage="input" init="1" />
+    <data name="filter"         type="struct" struct="filter"   usage="input" />
+    <data name="format"         type="char"   length="8"        usage="input" init="YASP0100" />
+    <data name="errorCode"      type="int"    length="4"        usage="input" init="0"/>
+  </program>
+
+  <program name="qyaspol-yasp0200" path="/QSYS.LIB/qyaspol.pgm" parseorder="listInfo receiver">
+    <data name="receiver"       type="struct" struct="yasp0200" usage="output"
+        count="listInfo.rcdsReturned" outputsize="receiverlength" />
+    <data name="receiverlength" type="int"    length="4"        usage="input" init="16384" />
+    <data name="listInfo"       type="struct" struct="listInfo" usage="output" />
+    <data name="nbrrcd"         type="int"    length="4"        usage="input" init="-1" />
+    <data name="nbrfilter"      type="int"    length="4"        usage="input" init="1" />
+    <data name="filter"         type="struct" struct="filter"   usage="input" />
+    <data name="format"         type="char"   length="8"        usage="input" init="YASP0200" />
+    <data name="errorCode"      type="int"    length="4"        usage="input" init="0"/>
+  </program>
+
+  <program name="qyaspol-yasp0300" path="/QSYS.LIB/qyaspol.pgm" parseorder="listInfo receiver">
+    <data name="receiver"       type="struct" struct="yasp0300" usage="output"
+        count="listInfo.rcdsReturned" outputsize="receiverlength" />
+    <data name="receiverlength" type="int"    length="4"        usage="input" init="16384" />
+    <data name="listInfo"       type="struct" struct="listInfo" usage="output" />
+    <data name="nbrrcd"         type="int"    length="4"        usage="input" init="-1" />
+    <data name="nbrfilter"      type="int"    length="4"        usage="input" init="1" />
+    <data name="filter"         type="struct" struct="filter"   usage="input" />
+    <data name="format"         type="char"   length="8"        usage="input" init="YASP0300" />
+    <data name="errorCode"      type="int"    length="4"        usage="input" init="0"/>
+  </program>
+
+</pcml>
