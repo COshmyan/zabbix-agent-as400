@@ -87,6 +87,15 @@ public class Config {
     public static boolean getUnsafeUserParameters() {return UnsafeUserParameters;   }
     public static boolean isConfigured()            {return configured;             }
 
+    public static ZbxMetric getZbxMetric(String key) throws ZbxException {
+        ZbxMetric command = commands.get(key);
+        if (null == command) {
+            Util.log(Util.LOG_ERROR, "Unsupported item key name: %s", key);
+            throw new ZbxException("Unsupported item key name: " + key);
+        }
+        return command;
+    }//getZbxMetric()
+
     private static int parseInt(String param_value, int min, int max) throws ZbxException {
         int ret;
         try {
@@ -271,22 +280,23 @@ public class Config {
 
     public static boolean setDefaultsAndValidate(String config_file_name) {
         boolean ret = true;
+        com.ibm.as400.access.AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
         try {
             //set defaults
+            //system = ((ZabbixThread)Thread.currentThread()).getAs400();
             if (null == User) {
-                com.ibm.as400.access.AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
                 if (system.isLocal())
                     User = "*CURRENT";
                 else
                     User = "zabbix";
-                try {
-                    system.setUserId(User);
-                    system.setPassword(asPassword);
-                } catch (PropertyVetoException ex) {
-                    throw new ZbxException("Could not set default value for \"User\" parameter ("
-                                            + User + "): " + ex.getMessage());
-                }
             }//if (User)
+            try {
+                system.setUserId(User);
+                system.setPassword(asPassword);
+            } catch (PropertyVetoException ex) {
+                throw new ZbxException("Could not set default value for \"User\" parameter ("
+                                        + User + "): " + ex.getMessage());
+            }//try-catch(set User/Password)
             if (null == Hostname) {
                 if (null == HostnameItem)
                     HostnameItem = "system.hostname";

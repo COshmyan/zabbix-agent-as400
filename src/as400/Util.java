@@ -16,6 +16,7 @@ public class Util {
     public static final int CF_HAVEPARAMS   = 0x01; //item accepts either optional or mandatory parameters
     public static final int CF_MODULE       = 0x02; //item is defined in a loadable module
     public static final int CF_USERPARAMETER= 0x04; //item is defined as user parameter
+    public static final int CF_AS400COMM    = 0x80000000; //real communication to AS/400 system is needed for obtaining value of this item
 
     private static final java.text.SimpleDateFormat ts = new java.text.SimpleDateFormat("yyyyMMdd:HHmmss.SSS");
     static Charset utf8 = null;
@@ -73,7 +74,10 @@ public class Util {
 
     public static synchronized void log(int level, Throwable ex, String message, Object... args) {
         log(level, message, args);
-        ex.printStackTrace(out);
+        if (null != out)
+            ex.printStackTrace(out);
+        else
+            log(level, "\n%s\n", ex);
     }//log()
 
     private static void rotateLog() {

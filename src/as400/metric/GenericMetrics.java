@@ -4,7 +4,7 @@ import as400.*;
 public class GenericMetrics {
 
     //constants
-    public static final String VERSION = "0.7.0";
+    public static final String VERSION = "0.7.1";
 
     static class ActiveOnlyMetric extends ZbxMetric {
 

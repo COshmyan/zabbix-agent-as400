@@ -342,9 +342,9 @@ class QYASPOL {
                 (0 == de.capacity ? 0 : (float)(de.capacity - de.available) / de.capacity)
             );
         case "state":
-//            long asp_state; //1==varyoff, 2==varyon
-//            if (0 == de.aspNum || 1 == (asp_state = ((Long)process_asp(Integer.toString(de.aspNum), "state")).longValue()) || 2 == asp_state) {
-            if (0 == de.aspNum || 1 == ((Long)process_asp(Integer.toString(de.aspNum), "state")).longValue()) {
+            long asp_state; //1==varyoff, 2==varyon
+            if (0 == de.aspNum || 1 == (asp_state = ((Long)process_asp(Integer.toString(de.aspNum), "state")).longValue()) || 2 == asp_state) {
+//            if (0 == de.aspNum || 1 == ((Long)process_asp(Integer.toString(de.aspNum), "state")).longValue()) {
                 return new Long(4294967295l);
             } else {
                 return new Long(de.status & 0x00000000FFFFFFFF);

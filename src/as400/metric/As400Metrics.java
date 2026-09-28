@@ -20,7 +20,7 @@ public class As400Metrics {
 
         //initialization of anonymous classes for generic agent metrics
         try {
-            new ZbxMetric("system.hostname", 0) {
+            new ZbxMetric("system.hostname", Util.CF_AS400COMM) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     if (null == req)
                         throw new ZbxException("Bad request");
@@ -41,7 +41,7 @@ public class As400Metrics {
         }//try-catch
 
         try {
-            new ZbxMetric("system.uname", 0) {
+            new ZbxMetric("system.uname", Util.CF_AS400COMM) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     if (null == req)
                         throw new ZbxException("Bad request");
@@ -67,7 +67,7 @@ public class As400Metrics {
         }//try-catch
 
         try {
-            new ZbxMetric("system.localtime", Util.CF_HAVEPARAMS) {
+            new ZbxMetric("system.localtime", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s",req.getKeyName());
                     AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
@@ -103,7 +103,7 @@ public class As400Metrics {
         }//try-catch
 
         try {
-            new ZbxMetric("system.cpu.num", Util.CF_HAVEPARAMS) {
+            new ZbxMetric("system.cpu.num", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s",req.getKeyName());
                     AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
@@ -131,7 +131,7 @@ public class As400Metrics {
         }//try-catch
 
         try {
-            new ZbxMetric("system.users.num", 0) {
+            new ZbxMetric("system.users.num", Util.CF_AS400COMM) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s",req.getKeyName());
                     AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
@@ -152,7 +152,7 @@ public class As400Metrics {
 
         try {
             //proc.num[<name>,<user>,<state>,<cmdline>]
-            new ZbxMetric("proc.num", Util.CF_HAVEPARAMS) {
+            new ZbxMetric("proc.num", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     int N = req.getNparam(), ret = 0;
                     if (N > 4)
@@ -240,7 +240,7 @@ public class As400Metrics {
         }//try-catch
 
         try {
-            new ZbxMetric("as400.subsystem", Util.CF_HAVEPARAMS) {
+            new ZbxMetric("as400.subsystem", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     String s, subsystem, library;
                     if (2 != req.getNparam() || "".equals(subsystem = req.getParam(0)) || "".equals(library = req.getParam(1)))
@@ -269,7 +269,7 @@ public class As400Metrics {
 /*
         //Unfortunately, this part still does not work successfully, it is experimental only
         try {
-            new ZbxMetric("system.run", Util.CF_HAVEPARAMS) {
+            new ZbxMetric("system.run", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     String cmd, library;
                     StringBuffer s = new StringBuffer();
@@ -315,7 +315,7 @@ public class As400Metrics {
         }//try-catch
 */
         try {
-            new ZbxMetric("as400.outputqueue.size", Util.CF_HAVEPARAMS) {
+            new ZbxMetric("as400.outputqueue.size", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     String oqueue, library;
                     int ret;
@@ -343,7 +343,7 @@ public class As400Metrics {
         }//try-catch
 
         try {
-            new ZbxMetric("as400.services", Util.CF_HAVEPARAMS) {
+            new ZbxMetric("as400.services", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s",req.getKeyName());
                     String s_services = null;
@@ -403,37 +403,9 @@ public class As400Metrics {
         } catch (ZbxException ex) {
             Util.log(Util.LOG_ERROR,"%s",ex);
         }//try-catch
-/*
-        try {
-            new ZbxMetric("as400.ASP1", Util.CF_HAVEPARAMS) {
-                public DataObject process(AgentRequest req) throws ZbxException, IOException {
-                    String param = null;
-                    if (0 == req.getNparam() || "".equals(param = req.getParam(0)))
-                        param = "total";
-                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
 
-                    try {
-                        switch (param) {
-                        case "total":
-                            return new DataObject(req.getUnparsedKey(), new Long(new SystemStatus(system).getSystemASP() * 1000000l));
-                        case "pused":
-                            return new DataObject(req.getUnparsedKey(), new Float(new SystemStatus(system).getPercentSystemASPUsed()));
-                        default:
-                            throw new ZbxException("Invalid parameter '" + param + "'");
-                        }//switch-case
-                    } catch (AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException|InterruptedException ex) {
-                        Util.log(Util.LOG_WARNING," As400Metric.process() error: %s", ex);
-                        throw new ZbxException(ex.toString());
-                    }//try-catch-finally
-
-                }//process()
-            };//new anonymous class
-        } catch (ZbxException ex) {
-            Util.log(Util.LOG_ERROR,"%s",ex);
-        }//try-catch
-*/
         try {
-            new ZbxMetric("vfs.fs.discovery", 0) {
+            new ZbxMetric("vfs.fs.discovery", Util.CF_AS400COMM) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {
@@ -448,7 +420,7 @@ public class As400Metrics {
         }//try-catch
 
         try {
-            new ZbxMetric("vfs.fs.size", Util.CF_HAVEPARAMS) {
+            new ZbxMetric("vfs.fs.size", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     String fs = null, mode = null;
                     if (1 > req.getNparam() || "".equals(fs = req.getParam(0)))
@@ -478,7 +450,7 @@ public class As400Metrics {
         }//try-catch
 
         try {
-            new ZbxMetric("vfs.fs.state", Util.CF_HAVEPARAMS) {
+            new ZbxMetric("vfs.fs.state", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     String fs = null;
                     if (1 > req.getNparam() || "".equals(fs = req.getParam(0)))
@@ -497,7 +469,7 @@ public class As400Metrics {
         }//try-catch
 
         try {
-            new ZbxMetric("as400.disk.discovery", 0) {
+            new ZbxMetric("as400.disk.discovery", Util.CF_AS400COMM) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {
@@ -512,7 +484,7 @@ public class As400Metrics {
         }//try-catch
 
         try {
-            new ZbxMetric("as400.disk.size", Util.CF_HAVEPARAMS) {
+            new ZbxMetric("as400.disk.size", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     String fs = null, mode = null;
                     if (1 > req.getNparam() || "".equals(fs = req.getParam(0)))
@@ -542,7 +514,7 @@ public class As400Metrics {
         }//try-catch
 
         try {
-            new ZbxMetric("as400.disk.state", Util.CF_HAVEPARAMS) {
+            new ZbxMetric("as400.disk.state", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     String fs = null;
                     if (1 > req.getNparam() || "".equals(fs = req.getParam(0)))
@@ -561,7 +533,7 @@ public class As400Metrics {
         }//try-catch
 
         try {
-            new ZbxMetric("as400.disk.asp", Util.CF_HAVEPARAMS) {
+            new ZbxMetric("as400.disk.asp", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     String fs = null;
                     if (1 > req.getNparam() || "".equals(fs = req.getParam(0)))
@@ -585,7 +557,7 @@ public class As400Metrics {
         //statistics for an "elapsed time" always returns zero's.
         //We use just a total usage time for each job and produce own calculations in Procstat class.
         try {
-            new ZbxMetric("as400.job.discovery", 0) {
+            new ZbxMetric("as400.job.discovery", Util.CF_AS400COMM) {
                 public DataObject process(AgentRequest req) throws ZbxException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {

@@ -668,6 +668,11 @@ public class ActiveCheck extends ZabbixThread {
             result.setFlag(metric.flags);
             result.setKey (metric.key_orig);
             processValue(Config.getHostname(), result);
+        } catch (ZbxException ex) {
+            if (isAs400CommError() && (Config.getZbxMetric(metric.agent_request.getKeyName()).getFlags() & Util.CF_AS400COMM) != 0)
+                    Util.log(Util.LOG_DEBUG," ActiveCheck.processCommonCheck(): error %s when thread is in \"communitation to AS/400 error\" state, check ignored", ex);
+            else
+                throw ex;
         } finally {
             Util.log(Util.LOG_DEBUG,"End of processCommonCheck()");
         }//try-catch
