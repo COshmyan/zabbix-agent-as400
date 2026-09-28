@@ -234,27 +234,34 @@ public class As400Metrics {
                                 jl.addJobSelectionCriteria(JobList.SELECTION_ACTIVE_JOB_STATUS,         curPar);
                             }//switch-case
                         }//state
-                        //implicit call of load() method from jl.getLength() does not throw any exceptions upon communication errors,
-                        //therefore we performs this call explicitly
-                        jl.load();
                         //4-th parameter: <subsystem>
                         if ( N<4 || "".equals(curPar = req.getParam(3)) ) {
-                            //curPar = null;
+                            //implicit call of load() method from jl.getLength() does not throw any exceptions upon communication errors,
+                            //therefore we performs this call explicitly
+                            jl.load();
                             ret = jl.getLength();
                         } else {
                             ZbxRegexp regex = new ZbxRegexp(curPar, false);
                             jl.addJobAttributeToRetrieve(Job.SUBSYSTEM);
+                            jl.load();
                             Enumeration jobs = jl.getJobs();
                             while (jobs.hasMoreElements()) {
-                                Job job = (Job)jobs.nextElement();
-                                String subsystem = job.getSubsystem();
-                                int i = subsystem.lastIndexOf('/') + 1;
-                                int j = subsystem.length() - (subsystem.endsWith(".SBSD") ? 5 : 0);
-                                subsystem = subsystem.substring(i, j);
-                                if ( regex.matches(subsystem) ) {
-                                    Util.log(Util.LOG_DEBUG,"   processed subsystem '%s' matched with '%s'", subsystem, regex);
-                                    ret++;
-                                }
+                                Job job = null;
+                                String subsystem = null;
+                                //in rare cases some job is disappeared during the job list processing, just ignore such job
+                                try {
+                                    job = (Job)jobs.nextElement();
+                                    subsystem = job.getSubsystem();
+                                } catch (ErrorCompletingRequestException|ObjectDoesNotExistException ex) { }
+                                if (null != subsystem) {
+                                    int i = subsystem.lastIndexOf('/') + 1;
+                                    int j = subsystem.length() - (subsystem.endsWith(".SBSD") ? 5 : 0);
+                                    subsystem = subsystem.substring(i, j);
+                                    if ( regex.matches(subsystem) ) {
+                                        Util.log(Util.LOG_DEBUG,"   processed subsystem '%s' matched with '%s'", subsystem, regex);
+                                        ret++;
+                                    }//if(matches)
+                                }//if(subsystem!=null)
                             }//while
                         }//if (subsystem defined)
                     } catch (PropertyVetoException|InterruptedException|AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException ex) {

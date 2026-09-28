@@ -12,6 +12,7 @@ public class Util {
     public static final int LOG_WARNING = 3;
     public static final int LOG_INFO    = -1;
     public static final int LOG_DEBUG   = 4;
+    public static final int LOG_TRACE1  = 5;
 
     public static final int CF_HAVEPARAMS   = 0x01; //item accepts either optional or mandatory parameters
     public static final int CF_MODULE       = 0x02; //item is defined in a loadable module

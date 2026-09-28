@@ -100,7 +100,7 @@ public class ActiveCheck extends ZabbixThread {
 		    for(int i=0;i<items.size();i++){
 			    if(0<i)
     			    sb.append(",\n");
-			    sb.append(items.get(i).toString());
+			    sb.append(items.get(i).toString(i));
 		    }
 		    return sb.toString();
 	    }//toString()
@@ -354,7 +354,7 @@ public class ActiveCheck extends ZabbixThread {
                 tmp = (String)jsonObj.get("info");
                 Util.log(Util.LOG_DEBUG," info from server: %s", str);
             }
-        } catch (ParseException|ClassCastException ex) {
+        } catch (NullPointerException|ParseException|ClassCastException ex) {
                 Util.log(Util.LOG_ERROR," cannot parse list of active checks: %s", ex);
         }//try-catch
 
@@ -502,8 +502,8 @@ public class ActiveCheck extends ZabbixThread {
 
     private void processEventLogCheck(ActiveCheckMetric metric) throws ZbxException {
 
-        Util.log(Util.LOG_DEBUG,"in processEventLogCheck(): key:'%s', lastlogsize:%d (%08x), lastsend=%d",
-                metric.key, metric.lastlogsize, metric.lastlogsize, metric.lastlogsize_sent);
+        Util.log(Util.LOG_DEBUG,"in processEventLogCheck(): key:'%s', lastlogsize:%d (%08x), lastsent=%d, mtime_ms=%d, mtime_ms_sent=%d",
+                metric.key, metric.lastlogsize, metric.lastlogsize, metric.lastlogsize_sent, metric.mtime_ms, metric.mtime_ms_sent);
         try {
             MessageQueue mqueue = null;
             boolean skipMode = true;
@@ -596,6 +596,8 @@ public class ActiveCheck extends ZabbixThread {
                     }//if
                 }//try-catch
                 while (mlist.hasMoreElements()) {
+                    if (!Config.running)
+                        break;
                     QueuedMessage msg = (QueuedMessage)mlist.nextElement();
                     long cur_lastlogsize = Util.key2long(msg.getKey());
                     if (cur_lastlogsize == metric.lastlogsize)
@@ -606,19 +608,27 @@ public class ActiveCheck extends ZabbixThread {
                     String cur_value    = msg.getText();
                     String cur_user     = msg.getCurrentUser();
                     int    cur_type     = msg.getType();
+                    long   cur_mtime_ms = -1l; try { cur_mtime_ms = msg.getDate().getTimeInMillis(); } catch (NullPointerException ex) {}
                     long   eventid      = 0l;
                     try { eventid = Long.parseLong(cur_eventid.replaceAll("[^0-9+-]*","")); } catch (NumberFormatException ex) { ; }
-                    Util.log(Util.LOG_DEBUG," New message processed: Key=%08x (%d), severity=%d, Type=%d, User='%s', EventID='%s', JobName='%s', Value='%s'",
-                            cur_lastlogsize, cur_lastlogsize, cur_severity, cur_type, cur_user, cur_eventid, cur_source, cur_value);
+                    Util.log(Util.LOG_DEBUG," New message processed: Key=%08x (%d), severity=%d, Type=%d, User='%s', EventID='%s', JobName='%s', timestamp_ms=%d, Value='%s'",
+                            cur_lastlogsize, cur_lastlogsize, cur_severity, cur_type, cur_user, cur_eventid, cur_source, cur_mtime_ms, cur_value);
+
+                    //ignore some messages: with old or invalid timestamps and with type=='reply'
+                    if (metric.mtime_ms > cur_mtime_ms) {
+                        Util.log(Util.LOG_DEBUG,"  Message with old mtime (%d < %d), ignored", cur_mtime_ms, metric.mtime_ms);
+                        continue;
+                    }//if(cur_mtime_ms)
                     switch (cur_type) {
                     case AS400Message.REPLY_NOT_VALIDITY_CHECKED:
                     case AS400Message.REPLY_VALIDITY_CHECKED:
                     case AS400Message.REPLY_MESSAGE_DEFAULT_USED:
                     case AS400Message.REPLY_SYSTEM_DEFAULT_USED:
                     case AS400Message.REPLY_FROM_SYSTEM_REPLY_LIST:
-                        Util.log(Util.LOG_DEBUG,"Message type is 'reply' (%d), ignored", cur_type);
+                        Util.log(Util.LOG_DEBUG,"  Message type is 'reply' (%d), ignored", cur_type);
                         continue;
                     }//switch-case
+
                     boolean b_regexp, b_source, b_eventid, b_user, matched, processed = false;
                     b_regexp  = (null == regex_value   || regex_value.matches  (cur_value)  );
                     b_source  = (null == regex_source  || regex_source.matches (cur_source) );
@@ -639,15 +649,18 @@ public class ActiveCheck extends ZabbixThread {
                         dobj.setEventId(eventid);
                         dobj.setSource(cur_source);
                         dobj.setFlags((byte)(metric.flags | ZBX_METRIC_FLAG_PERSISTENT));
+                        dobj.setMtime(cur_mtime_ms / 1000); //in seconds
                         processed = processValue(Config.getHostname(), dobj);
                         if (processed) {
                             s_count++;
                             metric.lastlogsize_sent = cur_lastlogsize;
+                            metric.mtime_ms_sent    = cur_mtime_ms;
                         }//if (ret)
                     }//if (match)
                     p_count++;
                     if (!matched | processed) {
                         metric.lastlogsize = cur_lastlogsize;
+                        metric.mtime_ms    = cur_mtime_ms;
                     } else {
                         //buffer is full, stop processing active checks till the buffer is cleared
                         break;
@@ -702,6 +715,8 @@ public class ActiveCheck extends ZabbixThread {
             if (!isMetricReadyToProcess(metric))
                 continue;
 
+            metric.lastlogsize_sent = metric.lastlogsize;
+            metric.mtime_ms_sent    = metric.mtime_ms;
             try {
                 if (0 != ((ZBX_METRIC_FLAG_LOG_LOG | ZBX_METRIC_FLAG_LOG_LOGRT) & metric.flags))
                     processLogCheck(metric);

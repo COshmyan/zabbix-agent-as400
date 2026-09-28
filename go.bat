@@ -1,5 +1,5 @@
 @echo off
-set JAVA_HOME=C:\JBuilderX\jdk1.8.0_20
+set JAVA_HOME=C:\JBuilderX\jdk1.8.0_201
 rem set CP=classes;lib\jt400.jar;lib\json-simple-1.1.1.jar
 set CP=lib\jt400.jar;lib\json-simple-1.1.1.jar
 set SOURCES=src\as400\*.java src\as400\metric\*.java src\as400\thread\*.java src\as400\cache\*.java src\as400\perfstat\*.java

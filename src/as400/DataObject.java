@@ -169,7 +169,7 @@ public class DataObject {
         this.flags &= (~flag);
     }
 
-    public String toString(){
+    public String toString(int id){
         StringBuffer sb = new StringBuffer();
         sb.append(" {\"host\":\"");
         sb.append(org.json.simple.JSONValue.escape(host));
@@ -178,6 +178,8 @@ public class DataObject {
         sb.append("\"");
         if (null != value)
             sb.append(",\n  \"value\":").append(org.json.simple.JSONValue.toJSONString(value));
+        sb.append(",\n  \"id\":");
+        sb.append(id);
         sb.append(",\n  \"clock\":");
         sb.append(clock_ms / 1000);             //ms -> seconds
         sb.append(",\n  \"ns\":");
@@ -186,7 +188,8 @@ public class DataObject {
             sb.append(",\n  \"state\":1");
         if (0  != (ActiveCheck.ZBX_METRIC_FLAG_LOG & flags))
             sb.append(",\n  \"lastlogsize\":").append(lastlogsize);
-        if (0  != (ActiveCheck.ZBX_METRIC_FLAG_LOG_LOGRT & flags))
+//        if (0  != (ActiveCheck.ZBX_METRIC_FLAG_LOG_LOGRT & flags))
+        if (0  != (ActiveCheck.ZBX_METRIC_FLAG_LOG & flags))
             sb.append(",\n  \"mtime\":").append(mtime);
         if (0l != severity)
             sb.append(",\n  \"severity\":").append(severity);

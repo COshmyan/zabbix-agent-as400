@@ -195,7 +195,7 @@ public class Procstat {
     public static void updateJobinfoList() {
 //        if (0 == query_list.size())
 //            return;
-        Util.log(Util.LOG_DEBUG,"Procstat.updateJobinfoList() started");
+        Util.log(Util.LOG_TRACE1,"Procstat.updateJobinfoList() started");
         AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
         JobList jl = new JobList(system);
         try {
@@ -213,13 +213,22 @@ public class Procstat {
             long current_ts = System.currentTimeMillis();
 
             while (jobs.hasMoreElements()) {
+                if (!Config.running)
+                    break;
                 Job job = (Job)jobs.nextElement();
-                String jobname = job.getName();
-                String jobnum  = job.getNumber();
-                String usrname = job.getUser();
-                String job_fullname = jobnum + '/' + usrname + '/' + jobname;
-                String subsystem = job.getSubsystem();
-                Object res = job.getValue(Job.CPU_TIME_USED_LARGE);
+                String jobname = null, jobnum = null, usrname = null, job_fullname = null, subsystem = null;
+                Object res;
+                //in rare cases some job is disappeared during the job list processing, just ignore such job
+                try {
+                    jobname = job.getName();
+                    jobnum  = job.getNumber();
+                    usrname = job.getUser();
+                    job_fullname = jobnum + '/' + usrname + '/' + jobname;
+                    subsystem = job.getSubsystem();
+                    res = job.getValue(Job.CPU_TIME_USED_LARGE);
+                } catch (ErrorCompletingRequestException|ObjectDoesNotExistException ex) {
+                    res = null;
+                }//try-catch
                 if (null == res)
                     continue;   //according to manual, API "may return null in the rare case"
                 long cpu_used = ((Long)res).longValue();
@@ -230,7 +239,7 @@ public class Procstat {
                 Jobinfo ji = jobinfo_list.get(job_fullname);
                 if (null == ji) {
                     //new job, there was no such job in previous iteration
-    	            Util.log(Util.LOG_DEBUG," Procstat.updateJobinfoList(): new job %20s, cpu_used=%d",
+    	            Util.log(Util.LOG_TRACE1," Procstat.updateJobinfoList(): new job %20s, cpu_used=%d",
 	            			job_fullname, cpu_used);
                     ji = new Jobinfo(jobnum, usrname, jobname, subsystem, current_ts, cpu_used);
                     //if this job was started since the previous check, then we will process all queries
@@ -261,7 +270,7 @@ public class Procstat {
                     if (0l > cpu_used_per_tick) {
                         Util.log(Util.LOG_DEBUG," WARNING: Procstat.updateJobinfoList(): negative value of cpu_used_per_tick %d for job %s in subsystem %s",
                             cpu_used_per_tick, job_fullname, subsystem);
-                        Util.log(Util.LOG_DEBUG,"  current cpu_used=%d, ji.cpu_used=%d", cpu_used, ji.cpu_used);
+                        Util.log(Util.LOG_TRACE1,"  current cpu_used=%d, ji.cpu_used=%d", cpu_used, ji.cpu_used);
                         cpu_used_per_tick = 0l;
                     }
                     synchronized (ji) {
@@ -278,6 +287,8 @@ public class Procstat {
 
             //update rest of queries by zero values (for taking into account any completed jobs)
             for (Enumeration<Query> e = query_list.elements(); e.hasMoreElements(); ) {
+                if (!Config.running)
+                    break;
                 Query query = e.nextElement();
                 if (query.last_updated < current_ts) {
                     query.add_time(0l, current_ts);
@@ -301,7 +312,7 @@ public class Procstat {
             //throw new ZbxException(ex.getMessage());
         } finally {
             try { jl.close(); } catch (InterruptedException|IOException|AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException ex) { ; }
-            Util.log(Util.LOG_DEBUG,"Procstat.updateJobinfoList() ended");
+            Util.log(Util.LOG_TRACE1,"Procstat.updateJobinfoList() ended");
         }//try-catch-finally
     }//updateJobinfoList()
 

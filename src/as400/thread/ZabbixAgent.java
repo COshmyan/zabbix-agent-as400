@@ -104,10 +104,11 @@ public class ZabbixAgent extends ZabbixThread {
 
         try {
             String []ServerActive = Config.getServerActive();
+            ActiveCheck []activeCheck = new ActiveCheck[(null == ServerActive) ? 0 : ServerActive.length];
             if (null != ServerActive) {
                 for (int i = 0; i < ServerActive.length; i++) {
-                    t = new ActiveCheck(ServerActive[i]);
-                    t.start();
+                    activeCheck[i] = new ActiveCheck(ServerActive[i]);
+                    activeCheck[i].start();
                 }//for(ServerActive)
             }//if (ServerActive)
             PassiveCheck.init();
@@ -115,6 +116,11 @@ public class ZabbixAgent extends ZabbixThread {
             try { collector.join(500); } catch (InterruptedException ex) { ; }
             cc.interrupt();
             try { cc.join(500); } catch (InterruptedException ex) { ; }
+            //stop all ActiveCheck threads
+            for (int i = 0; i < activeCheck.length; i++) {
+                activeCheck[i].interrupt();
+                try { activeCheck[i].join(10000); } catch (InterruptedException ex) { ; }
+            }//for
         } catch (Throwable ex) {
 	        Util.log(Util.LOG_CRITICAL, "ERROR: %s\n\tStack Trace:", ex);
                 ex.printStackTrace(Util.getPrintWriter());
