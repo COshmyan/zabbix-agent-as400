@@ -1,5 +1,6 @@
 package as400;
 import as400.metric.ZbxMetric;
+import as400.metric.UserParamMetric;
 import as400.comms.*;
 import as400.thread.*;
 import java.beans.PropertyVetoException;
@@ -7,6 +8,7 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.Enumeration;
+import java.util.Iterator;
 
 public class Config {
 
@@ -153,7 +155,7 @@ public class Config {
 
     //variables from config file
     private static boolean AllowRoot            = false;
-    private static boolean EnableRemoteCommands = false;
+    private static boolean EnableRemoteCommands = true;
     private static boolean LogRemoteCommands    = false;
     private static boolean UnsafeUserParameters = false;
     private static ZbxSubnet[] HostsAllowed     = null;
@@ -532,6 +534,32 @@ public class Config {
         return true;
     }//zbxCheckRequestAccessRules()
 
+    private static void loadUserParameters() throws ZbxException {
+        if (null == UserParameter)
+            return;
+
+        Iterator<String> it = UserParameter.iterator();
+        while (it.hasNext()) {
+            String line = it.next();
+            String splitted[] = line.split(",", 2);
+            if (2 > splitted.length)
+                throw new ZbxException("User parameter \"" + line + "\": not comma-separated");
+            AgentRequest req = new AgentRequest(splitted[0]);
+            int flags = Util.CF_USERPARAMETER;
+            if ( 1 == req.getNparam() && "*".equals(req.getParam(0)) )
+                flags |= Util.CF_HAVEPARAMS;
+            else if (0 != req.getNparam())
+                throw new ZbxException("User parameter \"" + line + "\": wrong number of parameters");
+            if (null != commands && commands.containsKey(req.getKeyName())) {
+                String err = (0 == (commands.get(req.getKeyName()).getFlags() & Util.CF_USERPARAMETER) ) ?
+                    "key duplicates a built-in metric" : "duplicated key";
+                throw new ZbxException("User parameter \"" + line + "\": " + err);
+            }//if
+            new UserParamMetric(req.getKeyName(), flags, splitted[1]);
+            it.remove();
+        }//while
+    }//loadUserParameters()
+
     private static void parseConfigLine(String param_name, String param_value) throws ZbxException {
         if ("".equals(param_value))
             throw new ZbxException("Invalid empty value");
@@ -560,7 +588,10 @@ public class Config {
             addZbxKeyAccessRule(param_name, param_value, false);
             break;
         case "EnableRemoteCommands":
+            Util.log(Util.LOG_WARNING,"EnableRemoteCommands parameter is deprecated, %s",
+                    " use AllowKey=system.run[*] or DenyKey=system.run[*] instead");
             EnableRemoteCommands = parseBoolean(param_value);
+            addZbxKeyAccessRule(param_name, "system.run[*]", EnableRemoteCommands);
             break;
         case "HeartbeatFrequency":
             HeartbeatFrequency = parseInt(param_value, 0, 3600);
@@ -649,9 +680,7 @@ public class Config {
         case "UserParameter":
             if (null == UserParameter)
                 UserParameter = new ArrayList<String>();
-            //!!check for validity
             UserParameter.add(param_value);
-            logWarn(param_name);
             break;
         case "UserParameterDir":
             UserParameterDir = param_value;
@@ -800,6 +829,7 @@ public class Config {
                 throw new ZbxException("invalid \"ListenIP\" configuration parameter: '" + ListenIP + "'");
             if (!"file".equals(LogType))
                 throw new ZbxException("invalid \"LogType\" configuration parameter: '" + LogType + "'; only 'file' is supported");
+            loadUserParameters();
             zbxFinalizeKeyAccessRulesConfiguration();
         } catch (ZbxException ex) {
             ret = false;

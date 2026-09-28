@@ -45,9 +45,7 @@ public class RequestThread extends Thread implements As400Thread {
                     throw rt.e;
             } else {
                 rt.interrupt();
-                DataObject ret = new DataObject(req.getUnparsedKey(), "Timeout " + req.getTimeout()/1000 + " seconds expired.");
-                ret.setStateNotsupported(true);
-                return ret;
+                throw new ZbxException("Timeout " + req.getTimeout()/1000 + " seconds expired.");
             }
         } catch (Exception ex) {
             throw new ZbxException(ex.toString());

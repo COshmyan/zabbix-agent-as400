@@ -18,7 +18,7 @@ public class ZabbixAgent extends ZabbixThread implements As400Thread {
 
     public static DataObject zbxExecuteAgentCheck(AgentRequest req, int flags, long timeout_ms) throws ZbxException {
         DataObject ret;
-        Util.log(Util.LOG_DEBUG, "in ZabbixAgent.process(): key_name='%s', full key='%s'",
+        Util.log(Util.LOG_DEBUG, "in ZabbixAgent.zbxExecuteAgentCheck(): key_name='%s', full key='%s'",
                 req.getKeyName(), req.getUnparsedKey());
         //resolve aliases, replacing original AgentRequest by the new one
         if (0 != (flags & Util.ZBX_PROCESS_WITH_ALIAS) )
@@ -27,16 +27,20 @@ public class ZabbixAgent extends ZabbixThread implements As400Thread {
         if (0 == (flags & Util.ZBX_PROCESS_LOCAL_COMMAND) && !Config.zbxCheckRequestAccessRules(req))
             throw new ZbxException ("Unsupported item key."); //forbidden
 
+        if (!Config.getEnableRemoteCommands() && 0 == (flags & Util.ZBX_PROCESS_LOCAL_COMMAND) && req.getKeyName().startsWith("system.run"))
+            throw new ZbxException ("Remote commands are not enabled."); //forbidden
+
         ZbxMetric command = Config.getZbxMetric(req.getKeyName());
         if (0 == (command.getFlags() & Util.CF_HAVEPARAMS) && !req.nullArguments())
             throw new ZbxException("Item does not allow parameters.");
+
+        //The part of checking about CF_USERPARAMETER flag went to the UserParamMetric.process() method
 
         if (0l == timeout_ms)
             timeout_ms = Config.getTimeout_ms();
         req.setTimeout(timeout_ms);
 
         try {
-//            ret = command.process(req);
             ret = RequestThread.getResult(command, req);
         } catch (Throwable ex) {
             Throwable cause = ex;
@@ -45,7 +49,7 @@ public class ZabbixAgent extends ZabbixThread implements As400Thread {
             }//while
             //the "cause" here is either null or subclass of IOException
             if (null == cause) {
-                Util.log(Util.LOG_DEBUG, "Error in ZabbixAgent.process(): %s", ex);
+                Util.log(Util.LOG_DEBUG, "Error in ZabbixAgent.zbxExecuteAgentCheck(): %s", ex);
                 if (ex instanceof ZbxException) {
                     throw ((ZbxException)ex);
                 } else {
@@ -55,21 +59,20 @@ public class ZabbixAgent extends ZabbixThread implements As400Thread {
 
                 //try to reconnect to AS/400
                 if (!((As400Thread)Thread.currentThread()).isAs400CommError()) {
-                    Util.log(Util.LOG_WARNING, " ZabbixAgent.process(): '%s' communication error: %s, trying to reconnect...",
+                    Util.log(Util.LOG_WARNING, " ZabbixAgent.zbxExecuteAgentCheck(): '%s' communication error: %s, trying to reconnect...",
                             req.getUnparsedKey(), ex);
                 }//if(it is the first communication error)
                 AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
                 if (system.isConnected())
                     system.disconnectAllServices();
                 try {
-//                    ret = command.process(req);
                     ret = RequestThread.getResult(command, req);
                 } catch (Throwable ex1) {
                     for (cause = ex1; null != cause && !(cause instanceof IOException); cause = cause.getCause())
                         ;
                     //the "cause" here is either null or subclass of IOException
                     if (null == cause) {
-                        Util.log(Util.LOG_DEBUG, "Error in ZabbixAgent.process(): %s", ex);
+                        Util.log(Util.LOG_DEBUG, "Error in ZabbixAgent.zbxExecuteAgentCheck(): %s", ex);
                         if (ex1 instanceof ZbxException) {
                             throw ((ZbxException)ex1);
                         } else {
@@ -77,7 +80,7 @@ public class ZabbixAgent extends ZabbixThread implements As400Thread {
                         }//throw this exception (ZbxException or RuntimeException) to next level
                     } else {
                         if (!((As400Thread)Thread.currentThread()).isAs400CommError()) {
-                            Util.log(Util.LOG_WARNING,"  ZabbixAgent.process() '%s' communication error: %s", req.getUnparsedKey(), ex1);
+                            Util.log(Util.LOG_WARNING,"  ZabbixAgent.zbxExecuteAgentCheck() '%s' communication error: %s", req.getUnparsedKey(), ex1);
                         }//if(it is the first communication error)
                         throw new ZbxException(ex1.toString());
                         //throw ((IOException)cause);
@@ -88,11 +91,11 @@ public class ZabbixAgent extends ZabbixThread implements As400Thread {
             }//if-else(!IOException)
 
         } finally {
-            Util.log(Util.LOG_DEBUG, "end of ZabbixAgent.process()");
+            Util.log(Util.LOG_DEBUG, "end of ZabbixAgent.zbxExecuteAgentCheck()");
         }//try-catch-finally
 
         if (((As400Thread)Thread.currentThread()).isAs400CommError() && (command.getFlags() & Util.CF_AS400COMM) != 0) {
-            Util.log(Util.LOG_WARNING," ZabbixAgent.process() '%s' communication to AS/400 is working again", req.getUnparsedKey());
+            Util.log(Util.LOG_WARNING," ZabbixAgent.zbxExecuteAgentCheck() '%s' communication to AS/400 is working again", req.getUnparsedKey());
             ((As400Thread)Thread.currentThread()).setAs400CommError(false);
         }//if
         return ret;

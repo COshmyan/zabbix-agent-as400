@@ -86,24 +86,6 @@ class SystemPoolMetric {
                     } catch (ZbxException ex) {
                         continue;
                     }//try-catch
-/*
-                    SystemPoolMetricEntry e = new SystemPoolMetricEntry();
-                    String name              = sp.getName();
-                        Util.log(Util.LOG_DEBUG, "   name: %s", name);
-                    if (null == name)
-                        continue;
-                    e.description       = sp.getDescription();
-                        Util.log(Util.LOG_DEBUG, "   description: %s", e.description);
-                    e.identifier        = sp.getIdentifier();
-                        Util.log(Util.LOG_DEBUG, "   identifier: %s", e.identifier);
-                    e.size              = sp.getSize();
-                        Util.log(Util.LOG_DEBUG, "   size: %d", e.size);
-                    e.databaseFaults    = sp.getDatabaseFaults();
-                        Util.log(Util.LOG_DEBUG, "   databaseFaults: %f", e.databaseFaults);
-                    e.nonDatabaseFaults = sp.getNonDatabaseFaults();
-                        Util.log(Util.LOG_DEBUG, "   nonDatabaseFaults: %f", e.nonDatabaseFaults);
-                    systemPoolTable.putEntry(name, e);
-*/
                 }//while
             } catch (AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException|InterruptedException ex) {
                 throw new ZbxException(ex.getMessage());

@@ -5,6 +5,22 @@ import java.util.Locale;
 
 public class Util {
 
+    static class MyLong {
+        //class variables
+        long value;
+
+        //Constructor
+        MyLong (long value) {
+            this.value = value;
+        }//Constructor
+
+        void setValue(long value) {
+            this.value = value;
+        }//setValue()
+
+        long getValue() { return this.value; }
+    }//internal class
+
     //Constants
     public static final int LOG_NO      = 0;
     public static final int LOG_CRITICAL= 1;
@@ -28,7 +44,7 @@ public class Util {
     private static java.text.NumberFormat nf = null;
     static Charset utf8 = null;
 
-    private static Long stored_ts   = new Long(0l);
+    private static MyLong stored_ts = new MyLong(0l);
 
     //Static variables
     private static PrintWriter out = null;
@@ -143,10 +159,10 @@ public class Util {
     public static long currentTimeMillis() {
         long current_ts = System.currentTimeMillis();
         synchronized (stored_ts) {
-            if (current_ts <= stored_ts.longValue())
-                current_ts = stored_ts.longValue() + 1;
-            stored_ts = new Long(current_ts);
-        }
+            if (current_ts <= stored_ts.getValue())
+                current_ts = stored_ts.getValue() + 1;
+            stored_ts.setValue(current_ts);
+        }//sync
         return current_ts;
     }//currentTimeMillis
 
@@ -239,5 +255,51 @@ public class Util {
         }
         return nf.format(value);
     }//roundFloat()
+
+    private static void zbxCheckUserParameter(String param) throws ZbxException {
+        if (Config.getUnsafeUserParameters())
+            return;
+        char suppressed_chars[] = {'\\', '\'', '\"', '`', '*', '?', '[', ']', '{', '}', '~', '$', '!', '&', ';', '(', ')', '<', '>', '|', '#', '@', '\n'};
+        for (int i = 0; i<suppressed_chars.length; i++) {
+            if (0 > param.indexOf(suppressed_chars[i]))
+                continue;
+            StringBuilder buf = new StringBuilder();
+            for (i = 0; i<suppressed_chars.length; i++) {
+                if (0 < i)
+                    buf.append(", ");
+                if ( Character.isWhitespace(suppressed_chars[i]) )
+                    buf.append(String.format("0x%02x", suppressed_chars[i]));
+                else
+                    buf.append(suppressed_chars[i]);
+            }//for
+            throw new ZbxException("Special characters\"" + buf.toString() + "\" are not allowed in the parameters.");
+        }//for
+    }//zbxCheckUserParameter()
+
+    public static String replaceParam(String cmd, AgentRequest request) throws ZbxException {
+        StringBuilder res = new StringBuilder();
+        int p1 = 0, p2, len = cmd.length();
+        char c;
+        while ( 0 <= (p2 = cmd.indexOf('$', p1)) ) {
+            res.append(cmd.substring(p1, p2));
+            if (p2 < (len-1))
+                p2++;
+            if ('0' == (c = cmd.charAt(p2)) )
+                res.append(cmd);
+            else if ('1' <= c && c <= '9') {
+                String param = request.getParam(c - '1');
+                if (null != param) {
+                    zbxCheckUserParameter(param);
+                    res.append(param);
+                }
+            } else {
+                if ('$' != c)
+                    res.append('$');
+                res.append(c);
+            }//if
+            p1 = p2 + 1;
+        }//while
+        return res.toString();
+    }//replaceParam()
 
 }//class Util

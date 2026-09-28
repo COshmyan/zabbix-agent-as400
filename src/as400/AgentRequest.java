@@ -26,7 +26,6 @@ public class AgentRequest {
         this.unparsed_key = str;
         this.key_name = m.group(1);
         String p = m.group(2);
-//        if (null != p && !"".equals(p)) {
         if (null != p) {
             this.params = new ArrayList<String>();
             parseParameters(p);
@@ -102,6 +101,11 @@ public class AgentRequest {
             p1 = p2 + 1;
         }//while (loop by parameters)
     }//parseParameters()
+
+    public void replaceParams(String param) {
+        this.params.clear();
+        this.params.add(param);
+    }//replaceParams()
 
     public String getUnparsedKey() {
         return unparsed_key;

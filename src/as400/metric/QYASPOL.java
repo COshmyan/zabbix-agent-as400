@@ -395,7 +395,7 @@ class QYASPOL {
     //static class variables
     private static final long TIMEOUT_MS = 5000l;//5 seconds
     private static ZbxCache aspTable = new ZbxCache(new aspCacheFiller(), "{#FSNAME}", "fsname", "aspTable", TIMEOUT_MS);
-    private static ZbxCache dskTable = new ZbxCache(new dskCacheFiller(), "{#DSK_SN}", "dsk_dn", "dskTable", TIMEOUT_MS);
+    private static ZbxCache dskTable = new ZbxCache(new dskCacheFiller(), "{#DSK_SN}", "dsk_sn", "dskTable", TIMEOUT_MS);
 
     static String process_asp_discovery() throws ZbxException, IOException {
         return aspTable.discovery();

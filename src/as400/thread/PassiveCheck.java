@@ -215,7 +215,7 @@ public class PassiveCheck extends ZabbixThread {
                 long timeout_ms = Interval.time2long(timeout.toString());
 
                 DataObject dobj = ZabbixAgent.zbxExecuteAgentCheck(new AgentRequest(str), Util.ZBX_PROCESS_WITH_ALIAS, timeout_ms);
-                result = new ZbxAnswer(true, dobj.getValue().toString());
+                result = new ZbxAnswer(!dobj.getStateNotsupported(), dobj.getValue().toString());
             }//for(ja)
         } catch (ClassCastException|NullPointerException|ZbxException ex) {
             result = new ZbxAnswer(false,
@@ -295,8 +295,10 @@ public class PassiveCheck extends ZabbixThread {
                     Util.log(Util.LOG_DEBUG,"PassiveCheck.process(): request is: '%s'", requestStr);
                     DataObject dobj = ZabbixAgent.zbxExecuteAgentCheck(new AgentRequest(requestStr), Util.ZBX_PROCESS_WITH_ALIAS, 0);
                     responseStr = dobj.getValue().toString();
+                    if (dobj.getStateNotsupported())
+                        responseStr = "ZBX_NOTSUPPORTED" + '\0' + responseStr;
                 } catch (ZbxException ex) {
-                    responseStr = "ZBX_NOTSUPPORTED"+'\0'+ex.getMessage();
+                    responseStr = "ZBX_NOTSUPPORTED" + '\0' + ex.getMessage();
                 }//try-catch
                 Util.log(Util.LOG_DEBUG,"PassiveCheck.process(): sending result: '%s'", responseStr);
                 zbxOut.write(ZbxSender.toBytes(responseStr));

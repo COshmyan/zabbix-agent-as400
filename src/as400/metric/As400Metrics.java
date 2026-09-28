@@ -75,7 +75,7 @@ public class As400Metrics {
                     try {
                         s = new SystemStatus(system).getSystemName();
                     } catch (AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException|InterruptedException ex) {
-                        Util.log(Util.LOG_WARNING," As400Metric.process() error: %s", ex);
+                        Util.log(Util.LOG_WARNING," As400Metric.process(%s) error: %s", req.getUnparsedKey(), ex);
                         throw new ZbxException(ex.toString());
                     }//try-catch
 
@@ -120,7 +120,7 @@ public class As400Metrics {
                             System.getProperty("java.vm.name", "unknown"),
                             System.getProperty("java.version", "unknown"));
                     } catch (AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException|InterruptedException ex) {
-                        Util.log(Util.LOG_WARNING," As400Metric.process() error: %s", ex);
+                        Util.log(Util.LOG_WARNING," As400Metric.process(%s) error: %s", req.getUnparsedKey(), ex);
                         throw new ZbxException(ex.toString());
                     }//try-catch
                     Util.log(Util.LOG_DEBUG,"As400Metric.process() is OK for %s: '%s'",req.getKeyName(), s);
@@ -158,11 +158,34 @@ public class As400Metrics {
                             throw new ZbxException("Invalid parameter: '" + curPar +"'");
                         }//if-else
                     } catch (AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException|InterruptedException|RequestNotSupportedException ex) {
-                        Util.log(Util.LOG_WARNING," As400Metric.process() error: %s", ex);
+                        Util.log(Util.LOG_WARNING," As400Metric.process(%s) error: %s", req.getUnparsedKey(), ex);
                         throw new ZbxException(ex.toString());
                     } finally {
                         Util.log(Util.LOG_DEBUG,"As400Metric.process() is OK for %s",req.getKeyName());
                     }//try-catch
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+
+        try {
+            new ZbxMetric("system.uptime", Util.CF_AS400COMM) {
+                public DataObject process(AgentRequest req) throws ZbxException, IOException {
+                    if (null == req)
+                        throw new ZbxException("Bad request");
+                    AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
+                    Long res;
+                    try {
+                        Job job = new Job(system, "SCPF", "QSYS", "000000");
+                        java.util.Date date = job.getJobEnterSystemDate();
+                        res = (System.currentTimeMillis() - date.getTime()) / 1000;
+                    } catch (AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException|InterruptedException ex) {
+                        Util.log(Util.LOG_WARNING," As400Metric.process(%s) error: %s", req.getUnparsedKey(), ex);
+                        throw new ZbxException(ex.toString());
+                    }//try-catch
+                    Util.log(Util.LOG_DEBUG,"As400Metric.process() is OK for %s: '%d'",req.getKeyName(), res);
+                    return new DataObject(req.getUnparsedKey(), res);
                 }//process()
             };//new anonymous class
         } catch (ZbxException ex) {
@@ -187,7 +210,7 @@ public class As400Metrics {
                             throw new ZbxException("Invalid parameter: '" + curPar +"'");
                         }//if-else
                     } catch (AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException|InterruptedException ex) {
-                        Util.log(Util.LOG_WARNING," As400Metric.process() error: %s", ex);
+                        Util.log(Util.LOG_WARNING," As400Metric.process(%s) error: %s", req.getUnparsedKey(), ex);
                         throw new ZbxException(ex.toString());
                     } finally {
                         Util.log(Util.LOG_DEBUG,"As400Metric.process() is OK for %s",req.getKeyName());
@@ -210,7 +233,7 @@ public class As400Metrics {
                         float ret = ss.getCurrentProcessingCapacity();
                         return new DataObject(req.getUnparsedKey(), new Float(ret));
                     } catch (AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException|InterruptedException ex) {
-                        Util.log(Util.LOG_WARNING," As400Metric.process() error: %s", ex);
+                        Util.log(Util.LOG_WARNING," As400Metric.process(%s) error: %s", req.getUnparsedKey(), ex);
                         throw new ZbxException(ex.toString());
                     } finally {
                         Util.log(Util.LOG_DEBUG,"As400Metric.process() is OK for %s",req.getKeyName());
@@ -232,7 +255,7 @@ public class As400Metrics {
                         int ret = ss.getUsersCurrentSignedOn();
                         return new DataObject(req.getUnparsedKey(), new Integer(ret));
                     } catch (AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException|InterruptedException ex) {
-                        Util.log(Util.LOG_WARNING," As400Metric.process() error: %s", ex);
+                        Util.log(Util.LOG_WARNING," As400Metric.process(%s) error: %s", req.getUnparsedKey(), ex);
                         throw new ZbxException(ex.toString());
                     } finally {
                         Util.log(Util.LOG_DEBUG,"As400Metric.process() is OK for %s",req.getKeyName());
@@ -330,7 +353,7 @@ public class As400Metrics {
                             }//while
                         }//if (subsystem defined)
                     } catch (PropertyVetoException|InterruptedException|AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException ex) {
-                        Util.log(Util.LOG_WARNING," As400Metric.process() error: %s", ex);
+                        Util.log(Util.LOG_WARNING," As400Metric.process(%s) error: %s", req.getUnparsedKey(), ex);
                         throw new ZbxException(ex.toString());
                     } finally {
                         try { jl.close(); } catch (InterruptedException|IOException|AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException ex) { ; }
@@ -359,7 +382,7 @@ public class As400Metrics {
                             throw new ZbxException("There is no subsystem with name='"+subsystem+"' in library '"+library+"'");
                         }//if (subsystem exists)
                     } catch (InterruptedException|AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException ex) {
-                        Util.log(Util.LOG_WARNING," As400Metric.process() error: %s", ex);
+                        Util.log(Util.LOG_WARNING," As400Metric.process(%s) error: %s", req.getUnparsedKey(), ex);
                         throw new ZbxException(ex.toString());
                     }//try-catch
                     //Possible values are: *ACTIVE, *ENDING, *INACTIVE, *RESTRICTED, and *STARTING.
@@ -369,54 +392,7 @@ public class As400Metrics {
         } catch (ZbxException ex) {
             Util.log(Util.LOG_ERROR,"%s",ex);
         }//try-catch
-/*
-        //Unfortunately, this part still does not work successfully, it is experimental only
-        try {
-            new ZbxMetric("system.run", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
-                public DataObject process(AgentRequest req) throws ZbxException, IOException {
-                    String cmd, library;
-                    StringBuilder s = new StringBuilder();
-                    if (1 > req.getNparam() || "".equals(cmd = req.getParam(0)))
-                        throw new ZbxException("Bad request: command needed");
-                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s",req.getKeyName());
-                    AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
-                    try {
-                        CommandCall command = new CommandCall(system);
-                        boolean res = command.run(cmd);
-                        AS400Message[] messagelist = command.getMessageList();
-                        for (int i = 0; i < messagelist.length; ++i) {
-                            s.append(messagelist[i].getID());
-                            s.append(" - ");
-                            s.append(messagelist[i].getText());
-                            s.append('\n');
-                        }//for
-                        if ( !res ) {
-                            throw new ZbxException("Error running CL command '"+cmd+"': "+s.toString());
-                        }//if (not success)
-                        JobLog joblog = command.getServerJob().getJobLog();
-                        joblog.load();
-                        for (Enumeration e = joblog.getMessages(); e.hasMoreElements(); ) {
-                            QueuedMessage msg = (QueuedMessage)e.nextElement();
-                            s.append("  Type: ");
-                            s.append(msg.getType());
-                            s.append(", ID: ");
-                            s.append(msg.getID());
-                            s.append('\n');
-                            s.append(msg.getText());
-                            s.append('\n');
-                        }//for
-                        joblog.close();
-                    } catch (InterruptedException|PropertyVetoException|AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException ex) {
-                        Util.log(Util.LOG_WARNING," As400Metric.process() error: %s", ex);
-                        throw new ZbxException(ex.toString());
-                    }//try-catch
-                    return new DataObject(req.getUnparsedKey(), s.toString());
-                }//process()
-            };//new anonymous class
-        } catch (ZbxException ex) {
-            Util.log(Util.LOG_ERROR,"%s",ex);
-        }//try-catch
-*/
+
         try {
             new ZbxMetric("as400.outputqueue.size", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
@@ -433,7 +409,7 @@ public class As400Metrics {
                         sfl.openSynchronously();
                         ret = sfl.size();
                     } catch (PropertyVetoException|InterruptedException|AS400SecurityException|ErrorCompletingRequestException|RequestNotSupportedException ex) {
-                        Util.log(Util.LOG_WARNING," As400Metric.process() error: %s", ex);
+                        Util.log(Util.LOG_WARNING," As400Metric.process(%s) error: %s", req.getUnparsedKey(), ex);
                         throw new ZbxException(ex.toString());
                     } finally {
                         sfl.close();
@@ -498,7 +474,7 @@ public class As400Metrics {
                             if (!system.isConnected(i))
                                 system.connectService(i);
                         } catch (IOException|AS400SecurityException ex) {
-                            Util.log(Util.LOG_ERROR, "Error in As400Metric.process(): %s", ex);
+                            Util.log(Util.LOG_ERROR, "Error in As400Metric.process(%s): %s", req.getUnparsedKey(), ex);
                         }//try-catch
                         try {
                             final As400Result as400Result = new As400Result(system, i);
@@ -506,7 +482,7 @@ public class As400Metrics {
                             as400Result.join(timeout);
                             if (as400Result.isAlive()) {
                                 Util.log(Util.LOG_ERROR,
-                                    "  Child thread for checking \"as400System.isConnectionAlive()\" was hung. Interrupting...");
+                                    "  Child thread for checking \"as400System.isConnectionAlive(%d)\" was hung. Interrupting...", i);
                                 system.disconnectService(i);
                                 as400Result.interrupt();
                                 Thread.sleep(2000);
@@ -515,7 +491,7 @@ public class As400Metrics {
                             if (!as400Result.result)
                                 ret |= service;
                         } catch (Throwable ex) {
-                            Util.log(Util.LOG_ERROR, "Error in As400Metric.process(): %s", ex);
+                            Util.log(Util.LOG_ERROR, "Error in As400Metric.process(%s): %s", req.getUnparsedKey(), ex);
                         }//try-catch
                         Util.log(Util.LOG_DEBUG, "  result is: %d", ret);
                     }//for
@@ -533,21 +509,6 @@ public class As400Metrics {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {
                         return new DataObject(req.getUnparsedKey(), QYASPOL.process_asp_discovery());
-                    } finally {
-                        Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
-                    }
-                }//process()
-            };//new anonymous class
-        } catch (ZbxException ex) {
-            Util.log(Util.LOG_ERROR,"%s",ex);
-        }//try-catch
-
-        try {
-            new ZbxMetric("vfs.fs.get", Util.CF_AS400COMM) {
-                public DataObject process(AgentRequest req) throws ZbxException, IOException {
-                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
-                    try {
-                        return new DataObject(req.getUnparsedKey(), QYASPOL.process_asp_get());
                     } finally {
                         Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
                     }
@@ -607,11 +568,11 @@ public class As400Metrics {
         }//try-catch
 
         try {
-            new ZbxMetric("as400.disk.discovery", Util.CF_AS400COMM) {
+            new ZbxMetric("vfs.fs.get", Util.CF_AS400COMM) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {
-                        return new DataObject(req.getUnparsedKey(), QYASPOL.process_dsk_discovery());
+                        return new DataObject(req.getUnparsedKey(), QYASPOL.process_asp_get());
                     } finally {
                         Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
                     }
@@ -622,11 +583,11 @@ public class As400Metrics {
         }//try-catch
 
         try {
-            new ZbxMetric("as400.disk.get", Util.CF_AS400COMM) {
+            new ZbxMetric("as400.disk.discovery", Util.CF_AS400COMM) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {
-                        return new DataObject(req.getUnparsedKey(), QYASPOL.process_dsk_get());
+                        return new DataObject(req.getUnparsedKey(), QYASPOL.process_dsk_discovery());
                     } finally {
                         Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
                     }
@@ -705,11 +666,11 @@ public class As400Metrics {
         }//try-catch
 
         try {
-            new ZbxMetric("as400.systemPool.discovery", Util.CF_AS400COMM) {
+            new ZbxMetric("as400.disk.get", Util.CF_AS400COMM) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {
-                        return new DataObject(req.getUnparsedKey(), SystemPoolMetric.process_systemPool_discovery());
+                        return new DataObject(req.getUnparsedKey(), QYASPOL.process_dsk_get());
                     } finally {
                         Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
                     }
@@ -720,11 +681,11 @@ public class As400Metrics {
         }//try-catch
 
         try {
-            new ZbxMetric("as400.systemPool.get", Util.CF_AS400COMM) {
+            new ZbxMetric("as400.systemPool.discovery", Util.CF_AS400COMM) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {
-                        return new DataObject(req.getUnparsedKey(), SystemPoolMetric.process_systemPool_get());
+                        return new DataObject(req.getUnparsedKey(), SystemPoolMetric.process_systemPool_discovery());
                     } finally {
                         Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
                     }
@@ -764,6 +725,22 @@ public class As400Metrics {
         } catch (ZbxException ex) {
             Util.log(Util.LOG_ERROR,"%s",ex);
         }//try-catch
+
+        try {
+            new ZbxMetric("as400.systemPool.get", Util.CF_AS400COMM) {
+                public DataObject process(AgentRequest req) throws ZbxException, IOException {
+                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
+                    try {
+                        return new DataObject(req.getUnparsedKey(), SystemPoolMetric.process_systemPool_get());
+                    } finally {
+                        Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
+                    }
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+
 /*
         //This part tried to use QGYOLJOB AS/400 API to collect native CPU usage statistics
         //(for elapsed time); however it looks that it's impossible from Java as it starts
@@ -802,46 +779,6 @@ public class As400Metrics {
                     }//try-catch
                     try {
                         return new DataObject(req.getUnparsedKey(), Procstat.jobDiscovery(seconds));
-                    } finally {
-                        Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
-                    }
-                }//process()
-            };//new anonymous class
-        } catch (ZbxException ex) {
-            Util.log(Util.LOG_ERROR,"%s",ex);
-        }//try-catch
-
-        try {
-            new ZbxMetric("proc.cpu.util.get", Util.CF_HAVEPARAMS) {
-                public DataObject process(AgentRequest req) throws ZbxException {
-                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
-                    int N = req.getNparam(), seconds = 0, mode = 0;
-                    String tmp;
-                    //1-st parameter: <seconds>
-                    if (1 > N || "".equals(tmp = req.getParam(0)))
-                        throw new ZbxException("Bad request: the first parameter needed");
-                    try {
-                        seconds = Integer.parseInt(tmp);
-                        if (1 >= seconds)
-                            throw new ZbxException("");
-                    } catch (NumberFormatException|ZbxException ex) {
-                            throw new ZbxException("Invalid parameter '" + tmp + "': must be a number more than 1");
-                    }//try-catch
-                    //2-nd parameter: <mode>
-                    tmp = 2 > N ? "" : req.getParam(1);
-                    switch (tmp) {
-                        case "":
-                        case "avg1":
-                            mode = 1; break;
-                        case "avg5" :
-                            mode = 5; break;
-                        case "avg15":
-                            mode = 15; break;
-                        default:
-                            throw new ZbxException("Invalid <mode> parameter: '" + tmp + "'");
-                    }//switch-case
-                    try {
-                        return new DataObject(req.getUnparsedKey(), Procstat.jobGet(seconds, mode));
                     } finally {
                         Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
                     }
@@ -902,6 +839,349 @@ public class As400Metrics {
             Util.log(Util.LOG_ERROR,"%s",ex);
         }//try-catch
 
+        try {
+            new ZbxMetric("proc.cpu.util.get", Util.CF_HAVEPARAMS) {
+                public DataObject process(AgentRequest req) throws ZbxException {
+                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
+                    int N = req.getNparam(), seconds = 0, mode = 0;
+                    String tmp;
+                    //1-st parameter: <seconds>
+                    if (1 > N || "".equals(tmp = req.getParam(0)))
+                        throw new ZbxException("Bad request: the first parameter needed");
+                    try {
+                        seconds = Integer.parseInt(tmp);
+                        if (1 >= seconds)
+                            throw new ZbxException("");
+                    } catch (NumberFormatException|ZbxException ex) {
+                            throw new ZbxException("Invalid parameter '" + tmp + "': must be a number more than 1");
+                    }//try-catch
+                    //2-nd parameter: <mode>
+                    tmp = 2 > N ? "" : req.getParam(1);
+                    switch (tmp) {
+                        case "":
+                        case "avg1":
+                            mode = 1; break;
+                        case "avg5" :
+                            mode = 5; break;
+                        case "avg15":
+                            mode = 15; break;
+                        default:
+                            throw new ZbxException("Invalid <mode> parameter: '" + tmp + "'");
+                    }//switch-case
+                    try {
+                        return new DataObject(req.getUnparsedKey(), Procstat.jobGet(seconds, mode));
+                    } finally {
+                        Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
+                    }
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+
+        try {
+            new ZbxMetric("as400.sql.select", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
+                public DataObject process(AgentRequest req) throws ZbxException, IOException {
+                    if (null == req)
+                        throw new ZbxException("Bad request");
+                    AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
+                    String sql, res=null;
+                    //1-st parameter: <SQL request>
+                    if (1 > req.getNparam())
+                        throw new ZbxException("Invalid request: '" + req.getUnparsedKey() +"'");
+                    sql = req.getParam(0);
+                    Util.log(Util.LOG_DEBUG," SQL request is: '%s'", sql);
+
+                    try {
+                        //IBM Toolbox JDBC driver
+                        AS400JDBCDriver driver = new AS400JDBCDriver();
+                        java.util.Properties prop = new java.util.Properties();
+                        prop.setProperty("access",            "read only");
+                        prop.setProperty("date format",       "iso"      );
+                        prop.setProperty("time format",       "iso"      );
+                        prop.setProperty("decimal separator", "."        );
+                        try (
+                            java.sql.Connection conn = driver.connect(system, prop, "defaultSchema");
+                            java.sql.Statement st = conn.createStatement();
+                        ) {
+                            st.setQueryTimeout((int)(req.getTimeout()/1000));
+                            if (st.execute(sql)) {
+                                try (java.sql.ResultSet rs = st.getResultSet()) {
+                                    if (null != rs && rs.next())
+                                        res = rs.getString(1); //get a single value only
+                                }//try-catch
+                            }//if
+                        }//try-catch
+                    } catch (NullPointerException|java.sql.SQLException ex) {
+                        Util.log(Util.LOG_WARNING," As400Metric.process(%s) error: %s", req.getUnparsedKey(), ex);
+                        throw new ZbxException(ex.toString());
+                    }//try-catch
+                    if (null == res)
+                        res = "<NULL>";
+
+                    Util.log(Util.LOG_DEBUG,"As400Metric.process() is OK for %s: '%s'",req.getKeyName(), res);
+                    return new DataObject(req.getUnparsedKey(), res);
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+
+        try {
+            new ZbxMetric("as400.sql.get", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
+                public DataObject process(AgentRequest req) throws ZbxException, IOException {
+                    if (null == req)
+                        throw new ZbxException("Bad request");
+                    AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
+                    String sql, res;
+                    StringBuilder buf = new StringBuilder(""), cur_line = new StringBuilder();
+                    //1-st parameter: <SQL request>
+                    if (1 > req.getNparam())
+                        throw new ZbxException("Invalid request: '" + req.getUnparsedKey() +"'");
+                    sql = req.getParam(0);
+                    Util.log(Util.LOG_DEBUG," SQL request is: '%s'", sql);
+
+                    try {
+                        //IBM Toolbox JDBC driver
+                        AS400JDBCDriver driver = new AS400JDBCDriver();
+                        java.util.Properties prop = new java.util.Properties();
+                        prop.setProperty("access",            "read only");
+                        prop.setProperty("date format",       "iso"      );
+                        prop.setProperty("time format",       "iso"      );
+                        prop.setProperty("decimal separator", "."        );
+                        try (
+                            java.sql.Connection conn = driver.connect(system, prop, "defaultSchema");
+                            java.sql.Statement st = conn.createStatement();
+                        ) {
+                            st.setQueryTimeout((int)(req.getTimeout()/1000));
+                            if (st.execute(sql)) {
+                                try (java.sql.ResultSet rs = st.getResultSet()) {
+                                    if (null != rs) {
+                                        java.sql.ResultSetMetaData rsmd = rs.getMetaData();
+                                        while (rs.next()) {//loop by rows
+                                            cur_line.setLength(0);
+                                            //loop by fields in a single row
+                                            for (int i = 1; i <= rsmd.getColumnCount(); i++) {
+                                                String cur_value = rs.getString(i);
+                                                if (null == cur_value)
+                                                    cur_value = "";
+
+                                                cur_line.append("\n  ");
+                                                cur_line.append(org.json.simple.JSONValue.toJSONString(rsmd.getColumnLabel(i)));
+                                                cur_line.append(": ");
+                                                cur_line.append(org.json.simple.JSONValue.toJSONString(cur_value));
+                                                cur_line.append(",");
+                                            }//for(line)
+                                            if (0 < cur_line.length()) //remove the final comma
+                                                cur_line.setLength(cur_line.length() - 1);
+                                            buf.append("\n {").append(cur_line).append("\n },");
+                                        }//while(rs)
+                                    }//if(rs!=null)
+                                }//try-catch, autoclose rs
+                            }//if
+                        }//try-catch, autoclose st an conn
+                    } catch (NullPointerException|java.sql.SQLException ex) {
+                        Util.log(Util.LOG_WARNING," As400Metric.process(%s) error: %s", req.getUnparsedKey(), ex);
+                        throw new ZbxException(ex.toString());
+                    }//try-catch
+                    if (0 < buf.length())
+                        buf.setLength(buf.length() - 1); //remove the final comma
+                    res = buf.insert(0, "[").append("\n]\n").toString();
+
+                    Util.log(Util.LOG_DEBUG,"As400Metric.process() is OK for %s: '%s'", req.getKeyName(), res);
+                    return new DataObject(req.getUnparsedKey(), res);
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+
+        /*
+         * The only analog for "system.run" metric in as400 that we could find is the QSH call.
+         * The QShell has concept of "stdout" and "stderr", but the only way to get them is to
+         * redirect these streams to (temporary) file and then to read this file.
+         * Therefore, we are calling the QSH, forming its command line to redirect both stdout and stderr,
+         * and then read it.
+         * Using "system" command, it's possible to call from QShell some CL commands, too.
+         */
+        try {
+            new ZbxMetric("system.run", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
+                public DataObject process(AgentRequest req) throws ZbxException, IOException {
+                    int num;
+                    String cmd, res;
+                    if (1 > (num = req.getNparam()) || "".equals(cmd = req.getParam(0)))
+                        throw new ZbxException("Bad request: command needed");
+                    if (1 < num)
+                        throw new ZbxException("Bad request: too many parameters");
+                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s",req.getKeyName());
+/*
+                    String cmd, output;
+                    StringBuilder buf = new StringBuilder();
+                    int i = 0, j, ccsid;
+                    //we can not ensure absolute uniqueness of this filename; but we can, at least, to lower its probability
+                    output = String.format("/tmp/qsh-output-%X.txt", Util.currentTimeMillis());
+                    buf.append("QSH CMD('{ ");
+                    //loop to double all apostrophes (if any) in cmd, as it is necessary for correct interpretation by QShell
+                    while ( (j = cmd.indexOf('\'', i)) >= 0) {
+                        buf.append(cmd.substring(i, ++j));
+                        buf.append('\'');
+                        i = j;
+                    }//while
+                    buf.append(cmd.substring(i));
+                    buf.append("; } >");
+                    buf.append(output);
+                    buf.append(" 2>&1')");
+                    cmd = buf.toString();
+                    buf.setLength(0);
+                    j = Config.getLogRemoteCommands() ? Util.LOG_WARNING : Util.LOG_DEBUG;
+                    Util.log(j, " executing the CommandCall: \"%s\"", cmd);
+
+                    AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
+                    try {
+                        CommandCall command = new CommandCall(system);
+                        boolean res = command.run(cmd);
+                        if ( !res ) {
+                            AS400Message[] messagelist = command.getMessageList();
+                            for (i = 0; i < messagelist.length; ++i) {
+                                buf.append(messagelist[i].getID());
+                                buf.append(" - ");
+                                buf.append(messagelist[i].getText());
+                                buf.append('\n');
+                            }//for
+                            throw new ZbxException("Error running CL command '" + cmd + "': " + buf.toString());
+                        }//if (not success)
+                        Util.log(Util.LOG_DEBUG, " CommandCall executed OK");
+
+                        IFSFile output_file = new IFSFile(system, output);
+                        ccsid = output_file.getCCSID();
+                        Util.log(Util.LOG_DEBUG, " '%s' does exist: %b, is file: %b, CCSID=%d", output, output_file.exists(), output_file.isFile(), output_file.getCCSID());
+                        if (!output_file.exists() || !output_file.isFile()) {
+                            JobLog joblog = command.getServerJob().getJobLog();
+                            joblog.load();
+                            for (Enumeration e = joblog.getMessages(); e.hasMoreElements(); ) {
+                                QueuedMessage msg = (QueuedMessage)e.nextElement();
+                                buf.append(msg.getID());
+                                buf.append(": ");
+                                buf.append(msg.getText());
+                                buf.append('\n');
+                            }//for
+                            joblog.close();
+                            throw new ZbxException("There is no output file; probably, CommandCall was unsuccessful. JobLog is:\n" + buf.toString());
+                        }
+                        if (0 > ccsid || 65535 == ccsid)
+                            throw new java.io.UnsupportedEncodingException("Text encoding of output is undefined, CCSID=" + ccsid);
+
+                        //reading from the output file
+                        try (
+                            IFSFileInputStream in = new IFSFileInputStream(system, output);
+                            BufferedReader br = new BufferedReader(new ConvTableReader(in, ccsid));
+                        ) {
+                            String line;
+                            while ((line = br.readLine()) != null) {
+                                buf.append(line).append('\n');
+                            }//while
+                        }//autoclose IFSFileInputStream & BufferedReader
+                        try {
+                            res = output_file.delete();
+                            Util.log(Util.LOG_DEBUG, " output file '%s' deleted: %b", output, res);
+                        } catch (IOException ex) { ; }
+                        Util.log(Util.LOG_DEBUG, "As400Metric.process() ended OK for metric '%s', result is:\n%s", req.getUnparsedKey(), buf.toString());
+                    } catch (InterruptedException|PropertyVetoException|AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException ex) {
+                        Util.log(Util.LOG_WARNING," As400Metric.process(%s) error: %s", req.getUnparsedKey(), ex);
+                        throw new ZbxException(ex.toString());
+                    }//try-catch
+*/
+                    res = executeStr(cmd);
+                    Util.log(Util.LOG_DEBUG, " As400Metric.process() ended OK for metric '%s'", req.getUnparsedKey());
+                    return new DataObject(req.getUnparsedKey(), res);
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+
     }//init()
+
+    public static String executeStr(String cmd) throws ZbxException, IOException {
+        String output;
+        StringBuilder buf = new StringBuilder();
+        int i = 0, j, ccsid;
+        Util.log(Util.LOG_DEBUG, "  executeStr() started for \"%s\"", cmd);
+
+        //we can not ensure absolute uniqueness of this filename; but we can, at least, to lower its probability
+        output = String.format("/tmp/qsh-output-%X.txt", Util.currentTimeMillis());
+        buf.append("QSH CMD('{ ");
+        //loop to double all apostrophes (if any) in cmd, as it is necessary for correct interpretation by QShell
+        while ( (j = cmd.indexOf('\'', i)) >= 0) {
+            buf.append(cmd.substring(i, ++j));
+            buf.append('\'');
+            i = j;
+        }//while
+        buf.append(cmd.substring(i));
+        buf.append("; } >");
+        buf.append(output);
+        buf.append(" 2>&1')");
+        cmd = buf.toString();
+        buf.setLength(0);
+        j = Config.getLogRemoteCommands() ? Util.LOG_WARNING : Util.LOG_DEBUG;
+        Util.log(j, "  executing the CommandCall: \"%s\"", cmd);
+
+        AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
+        try {
+            CommandCall command = new CommandCall(system);
+            boolean res = command.run(cmd);
+            if ( !res ) {
+                AS400Message[] messagelist = command.getMessageList();
+                for (i = 0; i < messagelist.length; ++i) {
+                    buf.append(messagelist[i].getID());
+                    buf.append(" - ");
+                    buf.append(messagelist[i].getText());
+                    buf.append('\n');
+                }//for
+                throw new ZbxException("Error running CL command '" + cmd + "': " + buf.toString());
+            }//if (not success)
+            Util.log(Util.LOG_DEBUG, "  CommandCall executed OK");
+
+            IFSFile output_file = new IFSFile(system, output);
+            ccsid = output_file.getCCSID();
+            Util.log(Util.LOG_DEBUG, "  '%s' does exist: %b, is file: %b, CCSID=%d", output, output_file.exists(), output_file.isFile(), output_file.getCCSID());
+            if (!output_file.exists() || !output_file.isFile()) {
+                JobLog joblog = command.getServerJob().getJobLog();
+                joblog.load();
+                for (Enumeration e = joblog.getMessages(); e.hasMoreElements(); ) {
+                    QueuedMessage msg = (QueuedMessage)e.nextElement();
+                    buf.append(msg.getID());
+                    buf.append(": ");
+                    buf.append(msg.getText());
+                    buf.append('\n');
+                }//for
+                joblog.close();
+                    throw new ZbxException("There is no output file; probably, CommandCall was unsuccessful. JobLog is:\n" + buf.toString());
+            }
+            if (0 > ccsid || 65535 == ccsid)
+                throw new java.io.UnsupportedEncodingException("Text encoding of output is undefined, CCSID=" + ccsid);
+
+            //reading from the output file
+            try (
+                IFSFileInputStream in = new IFSFileInputStream(system, output);
+                BufferedReader br = new BufferedReader(new ConvTableReader(in, ccsid));
+            ) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    buf.append(line).append('\n');
+                }//while
+            }//autoclose IFSFileInputStream & BufferedReader
+            try {
+                res = output_file.delete();
+                Util.log(Util.LOG_DEBUG, "  output file '%s' deleted: %b", output, res);
+            } catch (IOException ex) { ; }
+            Util.log(Util.LOG_DEBUG, " executeStr() ended OK for command '%s', result is:\n%s", cmd, buf.toString());
+        } catch (InterruptedException|PropertyVetoException|AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException ex) {
+            Util.log(Util.LOG_WARNING,"  executeStr(%s) error: %s", cmd, ex);
+            throw new ZbxException(ex.toString());
+        }//try-catch
+
+        return buf.toString();
+    }//executeStr()
 
 }//class As400Metrics
