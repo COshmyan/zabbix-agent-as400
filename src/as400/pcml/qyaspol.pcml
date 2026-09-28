@@ -7,7 +7,7 @@
     <data name="data"     type="int" length="4" init="-1"  />
   </struct>
 
-  <struct name="yasp0100" outputsize ="listInfo.rcdLength">
+  <struct name="yasp0100" outputsize="listInfo.rcdLength">
     <data name="aspNum"     type="int"  length="4"  />
     <data name="rsrcName"   type="char" length="10" />
     <data name="devDesc"    type="char" length="10" />
@@ -16,9 +16,10 @@
     <data name="aspStatus"  type="int"  length="4"  />
     <data name="dbName"     type="char" length="18" />
     <data name="aspResName" type="char" length="10" />
+    <data                   type="byte" length="0" offset="listInfo.rcdLength"/>
   </struct>
 
-  <struct name="yasp0200" outputsize ="listInfo.rcdLength">
+  <struct name="yasp0200" outputsize="listInfo.rcdLength">
     <data name="aspNum"                          type="int"  length="4" />
     <data name="dskNum"                          type="int"  length="4" />
     <data name="aspCapacityTotal"                type="int"  length="4" />
@@ -59,9 +60,15 @@
     <data name="geoMirrorResumePriority"         type="int"  length="4" />
     <data name="geoMirrorSuspendTimeout"         type="int"  length="4" />
     <data name="DiskUnitPresence"                type="int"  length="4" />
+<!--
+    <data name="EncryptedASP"                    type="char" length="1" />
+    <data name="GeoMirrorTransmisCompression"    type="char" length="1" />
+    <data                                        type="char" length="2" />
+-->
+    <data                                        type="byte" length="0" offset="listInfo.rcdLength"/>
   </struct>
 
-  <struct name="yasp0300" outputsize ="listInfo.rcdLength">
+  <struct name="yasp0300" outputsize="listInfo.rcdLength">
     <data name="aspNum"                          type="int"  length="4" />
     <data name="diskType"                        type="char" length="4" />
     <data name="diskModel"                       type="char" length="4" />
@@ -91,10 +98,14 @@
     <data name="availabilityParitySetUnit"       type="char" length="1" />
     <data name="multipleConnectionUnit"          type="char" length="1" />
     <data                                        type="char" length="2" />
+<!--
+    <data                                        type="char" length="28"/>
+-->
+    <data                                        type="byte" length="0" offset="listInfo.rcdLength"/>
   </struct>
 
   <struct name="listInfo" outputsize="80">
-    <data name="totalRcds"    type="int"  length="4" />
+    <data name="rcdsTotal"    type="int"  length="4" />
     <data name="rcdsReturned" type="int"  length="4" />
     <data name="reqHandle"    type="byte" length="4" />
     <data name="rcdLength"    type="int"  length="4" />
@@ -108,7 +119,6 @@
     <data                     type="byte" length="40" />
   </struct>
 
-  <!-- <program name="qyaspol" path="/QSYS.lib/QGY.lib/qyaspol.pgm" parseorder="listInfo receiver"> -->
   <program name="qyaspol-yasp0100" path="/QSYS.LIB/qyaspol.pgm" parseorder="listInfo receiver">
     <data name="receiver"       type="struct" struct="yasp0100" usage="output"
         count="listInfo.rcdsReturned" outputsize="receiverlength" />
@@ -125,7 +135,7 @@
     <data name="receiver"       type="struct" struct="yasp0200" usage="output"
         count="listInfo.rcdsReturned" outputsize="receiverlength" />
     <data name="receiverlength" type="int"    length="4"        usage="input" init="16384" />
-    <data name="listInfo"       type="struct" struct="listInfo" usage="output" />
+    <data name="listInfo"  type="struct" struct="listInfo" usage="output" />
     <data name="nbrrcd"         type="int"    length="4"        usage="input" init="-1" />
     <data name="nbrfilter"      type="int"    length="4"        usage="input" init="1" />
     <data name="filter"         type="struct" struct="filter"   usage="input" />
@@ -137,12 +147,46 @@
     <data name="receiver"       type="struct" struct="yasp0300" usage="output"
         count="listInfo.rcdsReturned" outputsize="receiverlength" />
     <data name="receiverlength" type="int"    length="4"        usage="input" init="16384" />
-    <data name="listInfo"       type="struct" struct="listInfo" usage="output" />
+    <data name="listInfo"  type="struct" struct="listInfo" usage="output" />
     <data name="nbrrcd"         type="int"    length="4"        usage="input" init="-1" />
     <data name="nbrfilter"      type="int"    length="4"        usage="input" init="1" />
     <data name="filter"         type="struct" struct="filter"   usage="input" />
     <data name="format"         type="char"   length="8"        usage="input" init="YASP0300" />
     <data name="errorCode"      type="int"    length="4"        usage="input" init="0"/>
+  </program>
+
+  <!-- Program QGYGTLE returned additional "records" from the list created by QYASPOL. -->
+  <program name="qgygtle-yasp0100" path="/QSYS.LIB/qgygtle.pgm" parseorder="listInfo receiver">
+    <data   name="receiver"       type="struct" struct="yasp0100" usage="output" 
+            count="listInfo.rcdsReturned" outputsize="receiverLength" />
+    <data   name="receiverLength" type="int"    length="4"        usage="input" init="16384" />
+    <data   name="requestHandle"  type="byte"   length="4"        usage="input" />
+    <data   name="listInfo"       type="struct" struct="listInfo" usage="output"/>
+    <data   name="rcdsToReturn"   type="int"    length="4"        usage="input" />
+    <data   name="startingRcd"    type="int"    length="4"        usage="input" />
+    <data   name="errorCode"      type="int"    length="4"        usage="input" init="0" />
+  </program>
+
+  <program name="qgygtle-yasp0200" path="/QSYS.LIB/qgygtle.pgm" parseorder="listInfo receiver">
+    <data   name="receiver"       type="struct" struct="yasp0200" usage="output" 
+            count="listInfo.rcdsReturned" outputsize="receiverLength" />
+    <data   name="receiverLength" type="int"    length="4"        usage="input" init="16384" />
+    <data   name="requestHandle"  type="byte"   length="4"        usage="input" />
+    <data   name="listInfo"       type="struct" struct="listInfo" usage="output"/>
+    <data   name="rcdsToReturn"   type="int"    length="4"        usage="input" />
+    <data   name="startingRcd"    type="int"    length="4"        usage="input" />
+    <data   name="errorCode"      type="int"    length="4"        usage="input" init="0" />
+  </program>
+
+  <program name="qgygtle-yasp0300" path="/QSYS.LIB/qgygtle.pgm" parseorder="listInfo receiver">
+    <data   name="receiver"       type="struct" struct="yasp0300" usage="output" 
+            count="listInfo.rcdsReturned" outputsize="receiverLength" />
+    <data   name="receiverLength" type="int"    length="4"        usage="input" init="16384" />
+    <data   name="requestHandle"  type="byte"   length="4"        usage="input" />
+    <data   name="listInfo"       type="struct" struct="listInfo" usage="output"/>
+    <data   name="rcdsToReturn"   type="int"    length="4"        usage="input" />
+    <data   name="startingRcd"    type="int"    length="4"        usage="input" />
+    <data   name="errorCode"      type="int"    length="4"        usage="input" init="0" />
   </program>
 
   <program name="qyaspol-qgyclst" path="/QSYS.LIB/qgyclst.pgm">

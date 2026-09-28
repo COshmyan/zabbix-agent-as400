@@ -49,6 +49,16 @@ class QYASPOL {
         }//appendToStringBuilder
     }//inner class DskEntry
 
+    private static void raiseException(String programName, ProgramCallDocument pcml) throws ZbxException, PcmlException {
+        Util.log(Util.LOG_WARNING, "  %s call failed, messages are:", programName);
+        AS400Message[] msgs = pcml.getMessageList(programName);
+        for (int i = 0; i < msgs.length; i++) {
+            Util.log(Util.LOG_WARNING, "   %s - %s", msgs[i].getID(), msgs[i].getText());
+        }//for
+        throw new ZbxException(0 < msgs.length ? msgs[0].getID() + " " + msgs[0].getText()
+                                : "Unknown error during " + programName);
+    }//raiseException()
+
     static class aspCacheFiller implements ZbxCacheFiller {
         public void fill() throws ZbxException, IOException {
             Util.log(Util.LOG_DEBUG, " QYASPOL.aspCacheFiller.fill() started");
@@ -56,105 +66,132 @@ class QYASPOL {
             AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
             ProgramCallDocument pcml = null;
             byte [] reqHandle = null;
+            int rcdsTotal;              //total number of records in the list
+            int rcdsReturned;           //number of records returned by the current system call (QYASPOL or QGYGTLE)
+            boolean doneProcessingList = false;
+            String programName = "qyaspol-yasp0200";
+            String value;               //current string value of some parameter
+            int[] indices = new int[1];	//indices for access array value
+
             try {
                 Util.log(Util.LOG_DEBUG, "  Constructing the ProgramCallDocument");
-/*
-                try {
-                    Trace.setFileName("C:\\workfiles\\as400\\debug_pcml_qyaspol.txt");
-                } catch (IOException ex) {
-                    Util.log(Util.LOG_ERROR, " Error " + ex);
-                }//try-catch
-                Trace.setTraceOn(true);
-                Trace.setTracePCMLOn(true);
-*/
+                if (Config.getDebugLevel() >= Util.LOG_TRACE1) {
+                    String debugFileName = Config.getLogFile().replaceFirst("\\.[^.]*$", ".debug");
+                    Util.log(Util.LOG_DEBUG, "  Debug file for ToolBox is: '%s'", debugFileName);
+                    try {
+                        Trace.setFileName(debugFileName);
+                    } catch (IOException ex) {
+                        Util.log(Util.LOG_ERROR, " Error " + ex);
+                    }//try-catch
+                    Trace.setTraceOn(true);
+                    Trace.setTracePCMLOn(true);
+                }
                 pcml = new ProgramCallDocument(system, "as400.pcml.qyaspol");
                 Util.log(Util.LOG_DEBUG, "  Call...");
 
-                if (pcml.callProgram("qyaspol-yasp0200")) {
-                    reqHandle = (byte[])pcml.getValue("qyaspol-yasp0200.listInfo.reqHandle");
-                    int rcdsReturned = pcml.getIntValue("qyaspol-yasp0200.listInfo.rcdsReturned");
-                    Util.log(Util.LOG_DEBUG, "  OK. Records: %d", rcdsReturned);
-                    String value = (String)pcml.getValue("qyaspol-yasp0200.listInfo.infoComplete");
-                    //should be "C" for "Complete and accurate information"
-                    if (!"C".equals(value))
-                        Util.log(Util.LOG_ERROR, "  Error during qyaspol-yasp0200: complete indicator is '%s'", value);
-                    int[] indices = new int[1];
-                    for (indices[0] = 0; indices[0] < rcdsReturned; indices[0]++) {
-                        AspEntry e = new AspEntry();
-                        e.status = 0;
-                        int num = pcml.getIntValue("qyaspol-yasp0200.receiver.aspCapacityTotal", indices);
-                        Util.log(Util.LOG_DEBUG, "   aspCapacityTotal: %d", num);
-                        e.capacity = num;
-                        num = pcml.getIntValue("qyaspol-yasp0200.receiver.aspCapacityAvailableTotal", indices);
-                        Util.log(Util.LOG_DEBUG, "   aspCapacityAvailableTotal: %d", num);
-                        e.available = num;
-                        value = (String)pcml.getValue("qyaspol-yasp0200.receiver.aspType", indices);
-                        Util.log(Util.LOG_DEBUG, "   aspType: '%s'", value);
-                        e.type = value;
-                        num = pcml.getIntValue("qyaspol-yasp0200.receiver.aspNum", indices);
-                        Util.log(Util.LOG_DEBUG, "   aspNum: %d", num);
-                        aspTable.putEntry(Integer.toString(num), e);
-                    }//for
-
-                    if (null != reqHandle) {
-                        try {
-                            pcml.setValue("qyaspol-qgyclst.reqHandle", reqHandle);
-                            boolean ret = pcml.callProgram("qyaspol-qgyclst");
-                            Util.log(Util.LOG_DEBUG,"   QYASPOL.aspCacheFiller.fill() closing list for qyaspol-yasp0200: %s", (ret ? "success" : "fail"));
-                        } catch (PcmlException ex1) {
-                            Util.log(Util.LOG_WARNING,"   QYASPOL.aspCacheFiller.fill() error during closing list for qyaspol-yasp0200: %s", ex1);
-                        }//try-catch
-                    }//if (reqHandle)
-
-                    if (pcml.callProgram("qyaspol-yasp0100")) {
-                        reqHandle = (byte[])pcml.getValue("qyaspol-yasp0100.listInfo.reqHandle");
-                        rcdsReturned = pcml.getIntValue("qyaspol-yasp0100.listInfo.rcdsReturned");
-                        Util.log(Util.LOG_DEBUG, "  qyaspol-yasp0100 OK. Records: %d", rcdsReturned);
-                        value = (String)pcml.getValue("qyaspol-yasp0100.listInfo.infoComplete");
+                if (false == pcml.callProgram(programName)) {
+                    raiseException(programName, pcml);
+                } else {
+                    int rcdsProcessed = 0;
+                    rcdsTotal = pcml.getIntValue(programName + ".listInfo.rcdsTotal");
+                    while (!doneProcessingList) {
+                        reqHandle = (byte[])pcml.getValue(programName + ".listInfo.reqHandle");
+                        rcdsReturned = pcml.getIntValue(programName + ".listInfo.rcdsReturned");
+                        Util.log(Util.LOG_DEBUG, "  OK. Records returned: %d of total: %d", rcdsReturned, rcdsTotal);
+                        value = (String)pcml.getValue(programName + ".listInfo.infoComplete");
                         //should be "C" for "Complete and accurate information"
                         if (!"C".equals(value))
-                            Util.log(Util.LOG_ERROR, "  Error during qyaspol-yasp0100: complete indicator is '%s'", value);
+                            Util.log(Util.LOG_ERROR, "  Error during qyaspol-yasp0200: complete indicator is '%s'", value);
                         for (indices[0] = 0; indices[0] < rcdsReturned; indices[0]++) {
-                            int status = pcml.getIntValue("qyaspol-yasp0100.receiver.aspStatus", indices);
-                            Util.log(Util.LOG_DEBUG, "   aspStatus: %d", status);
-                            int num = pcml.getIntValue("qyaspol-yasp0100.receiver.aspNum", indices);
+                            AspEntry e = new AspEntry();
+                            e.status = 0;
+                            int num = pcml.getIntValue(programName + ".receiver.aspCapacityTotal", indices);
+                            Util.log(Util.LOG_DEBUG, "   aspCapacityTotal: %d", num);
+                            e.capacity = num;
+                            num = pcml.getIntValue(programName + ".receiver.aspCapacityAvailableTotal", indices);
+                            Util.log(Util.LOG_DEBUG, "   aspCapacityAvailableTotal: %d", num);
+                            e.available = num;
+                            value = (String)pcml.getValue(programName + ".receiver.aspType", indices);
+                            Util.log(Util.LOG_DEBUG, "   aspType: '%s'", value);
+                            e.type = value;
+                            num = pcml.getIntValue(programName + ".receiver.aspNum", indices);
                             Util.log(Util.LOG_DEBUG, "   aspNum: %d", num);
-                            AspEntry e = (AspEntry)aspTable.getRawEntry(Integer.toString(num));
-                            if (null != e) {
-                                e.status = status;
-                                Util.log(Util.LOG_DEBUG, "   aspEntry updated for aspNum=%d", num);
-                            } else {
-                                Util.log(Util.LOG_DEBUG, "   aspEntry not found for aspNum=%d", num);
-                            }//if (e not found)
+                            aspTable.putEntry(Integer.toString(num), e);
                         }//for
-                    } else {
-                        Util.log(Util.LOG_WARNING, "  Fail, messages are:");
-                        AS400Message[] msgs = pcml.getMessageList("qyaspol-yasp0100");
-                        for (int i = 0; i < msgs.length; i++) {
-                            Util.log(Util.LOG_WARNING, "   %s - %s", msgs[i].getID(), msgs[i].getText());
-                        }//for
-                        throw new ZbxException(0 < msgs.length ? msgs[0].getID() + " " + msgs[0].getText()
-                                                : "Unknown error during qyaspol-yasp0100");
-                    }//if (pcml.callProgram() returned success)
+                        rcdsProcessed += rcdsReturned;
+                        if (rcdsTotal <= rcdsProcessed) {
+                            doneProcessingList = true;
+                        } else {
+                            programName = "qgygtle-yasp0200";
+                            //Set input parameters for QGYGTLE
+                            pcml.setValue(programName + ".requestHandle", reqHandle);
+                            pcml.setIntValue(programName + ".startingRcd", rcdsProcessed + 1);
+                            pcml.setIntValue(programName + ".rcdsToReturn", rcdsTotal - rcdsProcessed);
+                            //Call "Get List Entries" (QGYGTLE) to get more records from list
+                            if (false == pcml.callProgram(programName)) {
+                                raiseException(programName, pcml);
+                            }//if(!pcml.callProgram())
+                        }//if(rcdsProcessed)
+                    }//while(!doneProcessingList)
 
-                } else {
-                    Util.log(Util.LOG_WARNING, "  Fail, messages are:");
-                    AS400Message[] msgs = pcml.getMessageList("qyaspol-yasp0200");
-                    for (int i = 0; i < msgs.length; i++) {
-                        Util.log(Util.LOG_WARNING, "   %s - %s", msgs[i].getID(), msgs[i].getText());
-                    }//for
-                    throw new ZbxException(0 < msgs.length ? msgs[0].getID() + " " + msgs[0].getText()
-                                            : "Unknown error during qyaspol-yasp0200");
-                }//if (pcml.callProgram() returned success)
+                    try {
+                        pcml.setValue("qyaspol-qgyclst.reqHandle", reqHandle);
+                        boolean ret = pcml.callProgram("qyaspol-qgyclst");
+                        Util.log(Util.LOG_DEBUG,"   QYASPOL.aspCacheFiller.fill() closing list for %s: %s", programName, (ret ? "success" : "fail"));
+                    } catch (PcmlException ex1) {
+                        Util.log(Util.LOG_WARNING,"   QYASPOL.aspCacheFiller.fill() error during closing list for %s: %s", programName, ex1);
+                    }//try-catch
+
+                    programName = "qyaspol-yasp0100";
+                    doneProcessingList = false;
+                    if (false == pcml.callProgram(programName)) {
+                        raiseException(programName, pcml);
+                    } else {
+                        rcdsProcessed = 0;
+                        rcdsTotal = pcml.getIntValue(programName + ".listInfo.rcdsTotal");
+                        while (!doneProcessingList) {
+                            reqHandle = (byte[])pcml.getValue(programName + ".listInfo.reqHandle");
+                            rcdsReturned = pcml.getIntValue(programName + ".listInfo.rcdsReturned");
+                            Util.log(Util.LOG_DEBUG, "  " + programName + " OK. Records returned: %d of total: %d", rcdsReturned, rcdsTotal);
+                            value = (String)pcml.getValue(programName + ".listInfo.infoComplete");
+                            //should be "C" for "Complete and accurate information"
+                            if (!"C".equals(value))
+                                Util.log(Util.LOG_ERROR, "  Error during %s: complete indicator is '%s'", programName, value);
+                            for (indices[0] = 0; indices[0] < rcdsReturned; indices[0]++) {
+                                int status = pcml.getIntValue(programName + ".receiver.aspStatus", indices);
+                                Util.log(Util.LOG_DEBUG, "   aspStatus: %d", status);
+                                int num = pcml.getIntValue(programName + ".receiver.aspNum", indices);
+                                Util.log(Util.LOG_DEBUG, "   aspNum: %d", num);
+                                AspEntry e = (AspEntry)aspTable.getRawEntry(Integer.toString(num));
+                                if (null != e) {
+                                    e.status = status;
+                                    Util.log(Util.LOG_DEBUG, "   aspEntry updated for aspNum=%d", num);
+                                } else {
+                                    Util.log(Util.LOG_DEBUG, "   aspEntry not found for aspNum=%d", num);
+                                }//if (e not found)
+                            }//for
+
+                            rcdsProcessed += rcdsReturned;
+                            if (rcdsTotal <= rcdsProcessed) {
+                                doneProcessingList = true;
+                            } else {
+                                programName = "qgygtle-yasp0100";
+                                //Set input parameters for QGYGTLE
+                                pcml.setValue(programName + ".requestHandle", reqHandle);
+                                pcml.setIntValue(programName + ".startingRcd", rcdsProcessed + 1);
+                                pcml.setIntValue(programName + ".rcdsToReturn", rcdsTotal - rcdsProcessed);
+                                //Call "Get List Entries" (QGYGTLE) to get more records from list
+                                if (false == pcml.callProgram(programName)) {
+                                    raiseException(programName, pcml);
+                                }//if(!pcml.callProgram())
+                            }//if(rcdsProcessed)
+                        }//while(!doneProcessingList)
+                    }//if (pcml.callProgram("qyaspol-yasp0100") returned success)
+                }//if (pcml.callProgram("qyaspol-yasp0200") returned success)
 
             } catch (PcmlException ex) {
                 Exception ex1 = ex.getException();
                 if (null != ex1 && ex1 instanceof IOException) {
-/*
-                    if (!((ZabbixThread)Thread.currentThread()).isAs400CommError()) {
-                        Util.log(Util.LOG_WARNING,"  QYASPOL.aspCacheFiller.fill() communication to AS/400 error: %s", ex);
-                    }//if(it is the first communication error)
-*/
                     throw (IOException)ex1;
                 } else {
                     Util.log(Util.LOG_WARNING,"  QYASPOL.aspCacheFiller.fill() error: %s", ex);
@@ -165,12 +202,14 @@ class QYASPOL {
                     try {
                         pcml.setValue("qyaspol-qgyclst.reqHandle", reqHandle);
                         boolean ret = pcml.callProgram("qyaspol-qgyclst");
-                        Util.log(Util.LOG_DEBUG,"   QYASPOL.aspCacheFiller.fill() closing list: %s", (ret ? "success" : "fail"));
+                        Util.log(Util.LOG_DEBUG,"   QYASPOL.aspCacheFiller.fill() closing list for %s: %s", programName, (ret ? "success" : "fail"));
                     } catch (PcmlException ex1) {
-                        Util.log(Util.LOG_WARNING,"   QYASPOL.aspCacheFiller.fill() error during closing list: %s", ex1);
+                        Util.log(Util.LOG_WARNING,"   QYASPOL.aspCacheFiller.fill() error during closing list for %s: %s", programName, ex1);
                     }//try-catch
                 }//if (reqHandle)
-//                Trace.setTraceOn(false);
+                if (Config.getDebugLevel() >= Util.LOG_TRACE1) {
+                    Trace.setTraceOn(false);
+                }
                 Util.log(Util.LOG_DEBUG, " QYASPOL.aspCacheFiller.fill() ended");
             }//try-catch-finally
 
@@ -185,78 +224,91 @@ class QYASPOL {
             AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
             ProgramCallDocument pcml = null;
             byte [] reqHandle = null;
+            int rcdsTotal;              //total number of records in the list
+            int rcdsReturned;           //number of records returned by the current system call (QYASPOL or QGYGTLE)
+            boolean doneProcessingList = false;
+            String programName = "qyaspol-yasp0300";
+            String value;               //current string value of some parameter
+            int[] indices = new int[1];	//indices for access array value
+
             try {
                 Util.log(Util.LOG_DEBUG, "  Constructing the ProgramCallDocument");
-/*
-                try {
-                    Trace.setFileName("C:\\workfiles\\as400\\debug_pcml_qyaspol.txt");
-                } catch (IOException ex) {
-                    Util.log(Util.LOG_ERROR, " Error " + ex);
-                }//try-catch
-                Trace.setTraceOn(true);
-                Trace.setTracePCMLOn(true);
-*/
+                if (Config.getDebugLevel() >= Util.LOG_TRACE1) {
+                    String debugFileName = Config.getLogFile().replaceFirst("\\.[^.]*$", ".debug");
+                    Util.log(Util.LOG_DEBUG, "  Debug file for ToolBox is: '%s'", debugFileName);
+                    try {
+                        Trace.setFileName(debugFileName);
+                    } catch (IOException ex) {
+                        Util.log(Util.LOG_ERROR, " Error " + ex);
+                    }//try-catch
+                    Trace.setTraceOn(true);
+                    Trace.setTracePCMLOn(true);
+                }//if(LOG_TRACE1)
                 pcml = new ProgramCallDocument(system, "as400.pcml.qyaspol");
                 Util.log(Util.LOG_DEBUG, "  Call...");
-                boolean rc = pcml.callProgram("qyaspol-yasp0300");
-                if (rc) {
-                    reqHandle = (byte[])pcml.getValue("qyaspol-yasp0300.listInfo.reqHandle");
-                    int rcdsReturned = pcml.getIntValue("qyaspol-yasp0300.listInfo.rcdsReturned");
-                    Util.log(Util.LOG_DEBUG, "  OK. Records: %d", rcdsReturned);
-                    String value = (String)pcml.getValue("qyaspol-yasp0300.listInfo.infoComplete");
-                    //should be "C" for "Complete and accurate information"
-                    if (!"C".equals(value))
-                        Util.log(Util.LOG_ERROR, "  Error during qyaspol-yasp0300: complete indicator is '%s'", value);
-                    int[] indices = new int[1];
-
-                    for (indices[0] = 0; indices[0] < rcdsReturned; indices[0]++) {
-                        DskEntry e = new DskEntry();
-                        int num = pcml.getIntValue("qyaspol-yasp0300.receiver.diskUnitNo", indices);
-                        Util.log(Util.LOG_DEBUG, "   diskUnitNo: %d", num);
-                        e.unitNo = num;
-                        num = pcml.getIntValue("qyaspol-yasp0300.receiver.aspNum", indices);
-                        Util.log(Util.LOG_DEBUG, "   aspNum: %d", num);
-                        e.aspNum = num;
-                        num = pcml.getIntValue("qyaspol-yasp0300.receiver.diskCapacity", indices);
-                        Util.log(Util.LOG_DEBUG, "   diskCapacity: %d", num);
-                        e.capacity = num;
-                        num = pcml.getIntValue("qyaspol-yasp0300.receiver.diskStorageAvailable", indices);
-                        Util.log(Util.LOG_DEBUG, "   diskStorageAvailable: %d", num);
-                        e.available = num;
-                        num = pcml.getIntValue("qyaspol-yasp0300.receiver.unitControl", indices);
-                        Util.log(Util.LOG_DEBUG, "   unitControl: %d", num);
-                        e.status = num;
-                        value = (String)pcml.getValue("qyaspol-yasp0300.receiver.diskType", indices);
-                        Util.log(Util.LOG_DEBUG, "   diskType: '%s'", value);
-                        e.type = value;
-                        value = (String)pcml.getValue("qyaspol-yasp0300.receiver.diskModel", indices);
-                        Util.log(Util.LOG_DEBUG, "   diskModel: '%s'", value);
-                        e.model = value;
-                        value = (String)pcml.getValue("qyaspol-yasp0300.receiver.resName", indices);
-                        Util.log(Util.LOG_DEBUG, "   resName: '%s'", value);
-                        e.name = value;
-                        value = (String)pcml.getValue("qyaspol-yasp0300.receiver.diskSerial", indices);
-                        Util.log(Util.LOG_DEBUG, "   diskSerial: '%s'", value);
-                        dskTable.putEntry(value, e);
-                    }//for
+                if (false == pcml.callProgram(programName)) {
+                    raiseException(programName, pcml);
                 } else {
-                    Util.log(Util.LOG_WARNING, "  Fail, messages are:");
-                    AS400Message[] msgs = pcml.getMessageList("qyaspol-yasp0300");
-                    for (int i = 0; i < msgs.length; i++) {
-                        Util.log(Util.LOG_WARNING, "   %s - %s", msgs[i].getID(), msgs[i].getText());
-                    }//for
-                    throw new ZbxException(0 < msgs.length ? msgs[0].getID() + " " + msgs[0].getText()
-                                            : "Unknown error during qyaspol-yasp0300");
-                }//if (rc)
+                    int rcdsProcessed = 0;
+                    rcdsTotal = pcml.getIntValue(programName + ".listInfo.rcdsTotal");
+                    while (!doneProcessingList) {
+                        reqHandle = (byte[])pcml.getValue(programName + ".listInfo.reqHandle");
+                        rcdsReturned = pcml.getIntValue(programName + ".listInfo.rcdsReturned");
+                        Util.log(Util.LOG_DEBUG, "  OK. Records returned: %d of total: %d", rcdsReturned, rcdsTotal);
+                        value = (String)pcml.getValue(programName + ".listInfo.infoComplete");
+                        //should be "C" for "Complete and accurate information"
+                        if (!"C".equals(value))
+                            Util.log(Util.LOG_ERROR, "  Error during %s: complete indicator is '%s'", programName, value);
+                        for (indices[0] = 0; indices[0] < rcdsReturned; indices[0]++) {
+                            DskEntry e = new DskEntry();
+                            int num = pcml.getIntValue(programName + ".receiver.diskUnitNo", indices);
+                            Util.log(Util.LOG_DEBUG, "   diskUnitNo: %d", num);
+                            e.unitNo = num;
+                            num = pcml.getIntValue(programName + ".receiver.aspNum", indices);
+                            Util.log(Util.LOG_DEBUG, "   aspNum: %d", num);
+                            e.aspNum = num;
+                            num = pcml.getIntValue(programName + ".receiver.diskCapacity", indices);
+                            Util.log(Util.LOG_DEBUG, "   diskCapacity: %d", num);
+                            e.capacity = num;
+                            num = pcml.getIntValue(programName + ".receiver.diskStorageAvailable", indices);
+                            Util.log(Util.LOG_DEBUG, "   diskStorageAvailable: %d", num);
+                            e.available = num;
+                            num = pcml.getIntValue(programName + ".receiver.unitControl", indices);
+                            Util.log(Util.LOG_DEBUG, "   unitControl: %d", num);
+                            e.status = num;
+                            value = (String)pcml.getValue(programName + ".receiver.diskType", indices);
+                            Util.log(Util.LOG_DEBUG, "   diskType: '%s'", value);
+                            e.type = value;
+                            value = (String)pcml.getValue(programName + ".receiver.diskModel", indices);
+                            Util.log(Util.LOG_DEBUG, "   diskModel: '%s'", value);
+                            e.model = value;
+                            value = (String)pcml.getValue(programName + ".receiver.resName", indices);
+                            Util.log(Util.LOG_DEBUG, "   resName: '%s'", value);
+                            e.name = value;
+                            value = (String)pcml.getValue(programName + ".receiver.diskSerial", indices);
+                            Util.log(Util.LOG_DEBUG, "   diskSerial: '%s'", value);
+                            dskTable.putEntry(value, e);
+                        }//for
 
+                        rcdsProcessed += rcdsReturned;
+                        if (rcdsTotal <= rcdsProcessed) {
+                            doneProcessingList = true;
+                        } else {
+                            programName = "qgygtle-yasp0300";
+                            //Set input parameters for QGYGTLE
+                            pcml.setValue(programName + ".requestHandle", reqHandle);
+                            pcml.setIntValue(programName + ".startingRcd", rcdsProcessed + 1);
+                            pcml.setIntValue(programName + ".rcdsToReturn", rcdsTotal - rcdsProcessed);
+                            //Call "Get List Entries" (QGYGTLE) to get more records from list
+                            if (false == pcml.callProgram(programName)) {
+                                raiseException(programName, pcml);
+                            }//if(!pcml.callProgram())
+                        }//if(rcdsProcessed)
+                    }//while(!doneProcessingList)
+                }//if (pcml.callProgram("qyaspol-yasp0300") returned success)
             } catch (PcmlException ex) {
                 Exception ex1 = ex.getException();
                 if (null != ex1 && ex1 instanceof IOException) {
-/*
-                    if (!((ZabbixThread)Thread.currentThread()).isAs400CommError()) {
-                        Util.log(Util.LOG_WARNING,"  QYASPOL.dskCacheFiller.fill() communication to AS/400 error: %s", ex);
-                    }//if(it is the first communication error)
-*/
                     throw (IOException)ex1;
                 } else {
                     Util.log(Util.LOG_WARNING,"  QYASPOL.dskCacheFiller.fill() error: %s", ex);
@@ -267,12 +319,14 @@ class QYASPOL {
                     try {
                         pcml.setValue("qyaspol-qgyclst.reqHandle", reqHandle);
                         boolean ret = pcml.callProgram("qyaspol-qgyclst");
-                        Util.log(Util.LOG_DEBUG,"   QYASPOL.dskCacheFiller.fill() closing list: %s", (ret ? "success" : "fail"));
+                        Util.log(Util.LOG_DEBUG,"   QYASPOL.dskCacheFiller.fill() closing list for %s: %s", programName, (ret ? "success" : "fail"));
                     } catch (PcmlException ex1) {
-                        Util.log(Util.LOG_WARNING,"   QYASPOL.dskCacheFiller.fill() error during closing list: %s", ex1);
+                        Util.log(Util.LOG_WARNING,"   QYASPOL.dskCacheFiller.fill() error during closing list for %s: %s", programName, ex1);
                     }//try-catch
                 }//if (reqHandle)
-//                Trace.setTraceOn(false);
+                if (Config.getDebugLevel() >= Util.LOG_TRACE1) {
+                    Trace.setTraceOn(false);
+                }
                 Util.log(Util.LOG_DEBUG, " QYASPOL.dskCacheFiller.fill() ended");
             }//try-catch-finally
 
