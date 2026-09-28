@@ -55,7 +55,7 @@ public class PassiveCheck extends ZabbixThread {
                         }//if
                     }//sync
                     if (null != t) {
-                        Util.log(Util.LOG_DEBUG, " connection will be processes by thread %d [%s #%d]",
+                        Util.log(Util.LOG_DEBUG, " connection will be processed by thread %d [%s #%d]",
                                 t.getId(), t.getName(), t.process_num);
                         synchronized (t) {
                             t.s = s;

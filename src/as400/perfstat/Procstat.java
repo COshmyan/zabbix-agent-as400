@@ -259,9 +259,9 @@ public class Procstat {
                     //          job_fullname, cpu_used);
                     long cpu_used_per_tick = cpu_used - ji.cpu_used;
                     if (0l > cpu_used_per_tick) {
-                        Util.log(Util.LOG_WARNING," WARNING: Procstat.updateJobinfoList(): negative value of cpu_used_per_tick %d for job %s in subsystem %s",
+                        Util.log(Util.LOG_DEBUG," WARNING: Procstat.updateJobinfoList(): negative value of cpu_used_per_tick %d for job %s in subsystem %s",
                             cpu_used_per_tick, job_fullname, subsystem);
-                        Util.log(Util.LOG_WARNING,"  current cpu_used=%d, ji.cpu_used=%d", cpu_used, ji.cpu_used);
+                        Util.log(Util.LOG_DEBUG,"  current cpu_used=%d, ji.cpu_used=%d", cpu_used, ji.cpu_used);
                         cpu_used_per_tick = 0l;
                     }
                     synchronized (ji) {
