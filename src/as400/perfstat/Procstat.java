@@ -360,8 +360,7 @@ public class Procstat {
         }//sync(query_list)
     }//cleanQueryList()
 
-    public static String jobDiscovery(int seconds) {
-        long ms = seconds * 1000;
+    public static String jobDiscovery(long ms) {
         StringBuilder buf = new StringBuilder();
         buf.append("[");
         boolean first = true;
@@ -401,8 +400,7 @@ public class Procstat {
         return query.getPercentage(minutes, allow_empty);
     }//getPercentage()
 
-    public static String jobGet(int seconds, int mode) throws ZbxException {
-        long ms = seconds * 1000;
+    public static String jobGet(long ms, int mode) throws ZbxException {
         StringBuilder buf = new StringBuilder();
         buf.append("[");
         boolean first = true;

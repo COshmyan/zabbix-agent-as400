@@ -769,19 +769,19 @@ public class As400Metrics {
             new ZbxMetric("proc.cpu.util.discovery", Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
-                    int seconds = 0;
+                    long ms = 0l;
                     String tmp;
                     if (1 > req.getNparam() || "".equals(tmp = req.getParam(0)))
                         throw new ZbxException("Bad request: the first parameter needed");
                     try {
-                        seconds = Integer.parseInt(tmp);
-                        if (1 >= seconds)
+                        ms = Interval.time2long(tmp);
+                        if (1000l >= ms)
                             throw new ZbxException("");
-                    } catch (NumberFormatException|ZbxException ex) {
-                            throw new ZbxException("Invalid parameter '" + tmp + "': must be a number more than 1");
+                    } catch (ZbxException ex) {
+                            throw new ZbxException("Invalid parameter '" + tmp + "': must be a period more than 1 second");
                     }//try-catch
                     try {
-                        return new DataObject(req.getUnparsedKey(), Procstat.jobDiscovery(seconds));
+                        return new DataObject(req.getUnparsedKey(), Procstat.jobDiscovery(ms));
                     } finally {
                         Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
                     }
@@ -846,17 +846,18 @@ public class As400Metrics {
             new ZbxMetric("proc.cpu.util.get", Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
-                    int N = req.getNparam(), seconds = 0, mode = 0;
+                    int N = req.getNparam(), /* seconds = 0,*/ mode = 0;
+                    long ms = 0l;
                     String tmp;
                     //1-st parameter: <seconds>
                     if (1 > N || "".equals(tmp = req.getParam(0)))
                         throw new ZbxException("Bad request: the first parameter needed");
                     try {
-                        seconds = Integer.parseInt(tmp);
-                        if (1 >= seconds)
+                        ms = Interval.time2long(tmp);
+                        if (1000l >= ms)
                             throw new ZbxException("");
                     } catch (NumberFormatException|ZbxException ex) {
-                            throw new ZbxException("Invalid parameter '" + tmp + "': must be a number more than 1");
+                            throw new ZbxException("Invalid parameter '" + tmp + "': must be a period more than 1 second");
                     }//try-catch
                     //2-nd parameter: <mode>
                     tmp = 2 > N ? "" : req.getParam(1);
@@ -872,7 +873,7 @@ public class As400Metrics {
                             throw new ZbxException("Invalid <mode> parameter: '" + tmp + "'");
                     }//switch-case
                     try {
-                        return new DataObject(req.getUnparsedKey(), Procstat.jobGet(seconds, mode));
+                        return new DataObject(req.getUnparsedKey(), Procstat.jobGet(ms, mode));
                     } finally {
                         Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
                     }

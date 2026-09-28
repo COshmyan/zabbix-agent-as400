@@ -1324,10 +1324,10 @@ public class ActiveCheck extends ZabbixThread {
                         nextrefresh = System.currentTimeMillis() + 
                                         Config.getRefreshActiveChecks() * 1000;
                         nextcheck = 0l;
-                        if (0 != retry_after)
-                            retry_after = 0;
+                        if (0l != retry_after)
+                            retry_after = 0l;
                     } else {//Fail
-                        retry_after = (0 == retry_after) ? RETRY_INTERVAL_MIN : (retry_after * 2);
+                        retry_after = (0l == retry_after) ? RETRY_INTERVAL_MIN : (retry_after * 2);
                         if (retry_after > RETRY_INTERVAL_MAX)
                             retry_after = RETRY_INTERVAL_MAX;
                         nextrefresh = System.currentTimeMillis() + retry_after;
