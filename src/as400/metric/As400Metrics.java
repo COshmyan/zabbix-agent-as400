@@ -30,7 +30,9 @@ public class As400Metrics {
 
     }//internal static class
 
-    //class variables
+    //class static final variables
+    static final int WAIT   = 1;
+    static final int NOWAIT = 0;
 
     public As400Metrics() {
         //system = new AS400(as400ServerHost, Config.getUser(), asPassword);
@@ -340,13 +342,13 @@ public class As400Metrics {
                                 try {
                                     job = jobs.nextElement();
                                     subsystem = job.getSubsystem();
-                                } catch (ErrorCompletingRequestException|ObjectDoesNotExistException ex) { }
+                                } catch (ErrorCompletingRequestException|ObjectDoesNotExistException|java.util.NoSuchElementException ex) { }
                                 if (null != subsystem) {
                                     int i = subsystem.lastIndexOf('/') + 1;
                                     int j = subsystem.length() - (subsystem.endsWith(".SBSD") ? 5 : 0);
                                     subsystem = subsystem.substring(i, j);
                                     if ( regex.matches(subsystem) ) {
-                                        Util.log(Util.LOG_DEBUG,"   processed subsystem '%s' matched with '%s'", subsystem, regex);
+                                        Util.log(Util.LOG_TRACE1,"   processed subsystem '%s' matched with '%s'", subsystem, regex);
                                         ret++;
                                     }//if(matches)
                                 }//if(subsystem!=null)
@@ -464,7 +466,7 @@ public class As400Metrics {
                             services = 0x01 << services;
                         }//try-catch
                     final AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
-                    long timeout = req.getTimeout() / Integer.bitCount(services);
+                    long timeout = req.getTimeout_ms() / Integer.bitCount(services);
                     Util.log(Util.LOG_DEBUG, " timeout for a single service is: %d ms", timeout);
                     for (int i = 0, service = 1; i <= 7; i++, service <<= 1) {
                         Util.log(Util.LOG_DEBUG, " checking connection for a service %d (%d), mask=%d", i, service, services);
@@ -483,11 +485,12 @@ public class As400Metrics {
                             if (as400Result.isAlive()) {
                                 Util.log(Util.LOG_ERROR,
                                     "  Child thread for checking \"as400System.isConnectionAlive(%d)\" was hung. Interrupting...", i);
-                                system.disconnectService(i);
                                 as400Result.interrupt();
-                                Thread.sleep(2000);
+                                Util.log(Util.LOG_ERROR, "  Child thread was interrupted");
+                                Thread.sleep(500);//give the child thread a chance to die gracefully
+                                system.disconnectService(i);
+                                Util.log(Util.LOG_ERROR, "  Child thread was disconnected from service %d", i);
                             }//if(isAlive)
-//                            if (!system.isConnectionAlive(i))
                             if (!as400Result.result)
                                 ret |= service;
                         } catch (Throwable ex) {
@@ -904,7 +907,7 @@ public class As400Metrics {
                             java.sql.Connection conn = driver.connect(system, prop, "defaultSchema");
                             java.sql.Statement st = conn.createStatement();
                         ) {
-                            st.setQueryTimeout((int)(req.getTimeout()/1000));
+                            st.setQueryTimeout((int)(req.getTimeout_ms()/1000));//in seconds, not milliseconds
                             if (st.execute(sql)) {
                                 try (java.sql.ResultSet rs = st.getResultSet()) {
                                     if (null != rs && rs.next())
@@ -953,7 +956,7 @@ public class As400Metrics {
                             java.sql.Connection conn = driver.connect(system, prop, "defaultSchema");
                             java.sql.Statement st = conn.createStatement();
                         ) {
-                            st.setQueryTimeout((int)(req.getTimeout()/1000));
+                            st.setQueryTimeout((int)(req.getTimeout_ms()/1000));//in seconds, not in milliseconds
                             if (st.execute(sql)) {
                                 try (java.sql.ResultSet rs = st.getResultSet()) {
                                     if (null != rs) {
@@ -1007,91 +1010,30 @@ public class As400Metrics {
         try {
             new ZbxMetric("system.run", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
-                    int num;
-                    String cmd, res;
-                    if (1 > (num = req.getNparam()) || "".equals(cmd = req.getParam(0)))
+                    int N = req.getNparam(), mode;
+                    String cmd, res, tmp;
+                    //1-st parameter: <command>
+                    cmd = N<1 ? "" : req.getParam(0);
+                    //2-st parameter: <mode>
+                    tmp = N<2 ? "" : req.getParam(1);
+                    switch (tmp) {
+                        case "":
+                        case "wait":
+                            mode = WAIT;
+                            break;
+                        case "nowait" :
+                            mode = NOWAIT;
+                            break;
+                        default:
+                            throw new ZbxException("Invalid <mode> parameter: '" + tmp + "'");
+                    }//switch-case
+
+                    if ("".equals(cmd))
                         throw new ZbxException("Bad request: command needed");
-                    if (1 < num)
+                    if (2 < N)
                         throw new ZbxException("Bad request: too many parameters");
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s",req.getKeyName());
-/*
-                    String cmd, output;
-                    StringBuilder buf = new StringBuilder();
-                    int i = 0, j, ccsid;
-                    //we can not ensure absolute uniqueness of this filename; but we can, at least, to lower its probability
-                    output = String.format("/tmp/qsh-output-%X.txt", Util.currentTimeMillis());
-                    buf.append("QSH CMD('{ ");
-                    //loop to double all apostrophes (if any) in cmd, as it is necessary for correct interpretation by QShell
-                    while ( (j = cmd.indexOf('\'', i)) >= 0) {
-                        buf.append(cmd.substring(i, ++j));
-                        buf.append('\'');
-                        i = j;
-                    }//while
-                    buf.append(cmd.substring(i));
-                    buf.append("; } >");
-                    buf.append(output);
-                    buf.append(" 2>&1')");
-                    cmd = buf.toString();
-                    buf.setLength(0);
-                    j = Config.getLogRemoteCommands() ? Util.LOG_WARNING : Util.LOG_DEBUG;
-                    Util.log(j, " executing the CommandCall: \"%s\"", cmd);
-
-                    AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
-                    try {
-                        CommandCall command = new CommandCall(system);
-                        boolean res = command.run(cmd);
-                        if ( !res ) {
-                            AS400Message[] messagelist = command.getMessageList();
-                            for (i = 0; i < messagelist.length; ++i) {
-                                buf.append(messagelist[i].getID());
-                                buf.append(" - ");
-                                buf.append(messagelist[i].getText());
-                                buf.append('\n');
-                            }//for
-                            throw new ZbxException("Error running CL command '" + cmd + "': " + buf.toString());
-                        }//if (not success)
-                        Util.log(Util.LOG_DEBUG, " CommandCall executed OK");
-
-                        IFSFile output_file = new IFSFile(system, output);
-                        ccsid = output_file.getCCSID();
-                        Util.log(Util.LOG_DEBUG, " '%s' does exist: %b, is file: %b, CCSID=%d", output, output_file.exists(), output_file.isFile(), output_file.getCCSID());
-                        if (!output_file.exists() || !output_file.isFile()) {
-                            JobLog joblog = command.getServerJob().getJobLog();
-                            joblog.load();
-                            for (Enumeration e = joblog.getMessages(); e.hasMoreElements(); ) {
-                                QueuedMessage msg = (QueuedMessage)e.nextElement();
-                                buf.append(msg.getID());
-                                buf.append(": ");
-                                buf.append(msg.getText());
-                                buf.append('\n');
-                            }//for
-                            joblog.close();
-                            throw new ZbxException("There is no output file; probably, CommandCall was unsuccessful. JobLog is:\n" + buf.toString());
-                        }
-                        if (0 > ccsid || 65535 == ccsid)
-                            throw new java.io.UnsupportedEncodingException("Text encoding of output is undefined, CCSID=" + ccsid);
-
-                        //reading from the output file
-                        try (
-                            IFSFileInputStream in = new IFSFileInputStream(system, output);
-                            BufferedReader br = new BufferedReader(new ConvTableReader(in, ccsid));
-                        ) {
-                            String line;
-                            while ((line = br.readLine()) != null) {
-                                buf.append(line).append('\n');
-                            }//while
-                        }//autoclose IFSFileInputStream & BufferedReader
-                        try {
-                            res = output_file.delete();
-                            Util.log(Util.LOG_DEBUG, " output file '%s' deleted: %b", output, res);
-                        } catch (IOException ex) { ; }
-                        Util.log(Util.LOG_DEBUG, "As400Metric.process() ended OK for metric '%s', result is:\n%s", req.getUnparsedKey(), buf.toString());
-                    } catch (InterruptedException|PropertyVetoException|AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException ex) {
-                        Util.log(Util.LOG_WARNING," As400Metric.process(%s) error: %s", req.getUnparsedKey(), ex);
-                        throw new ZbxException(ex.toString());
-                    }//try-catch
-*/
-                    res = executeStr(cmd);
+                    res = executeStr(cmd, mode);
                     Util.log(Util.LOG_DEBUG, " As400Metric.process() ended OK for metric '%s'", req.getUnparsedKey());
                     return new DataObject(req.getUnparsedKey(), res);
                 }//process()
@@ -1102,10 +1044,12 @@ public class As400Metrics {
 
     }//init()
 
-    public static String executeStr(String cmd) throws ZbxException, IOException {
+    public static String executeStr(String cmd, int mode) throws ZbxException, IOException {
         String output;
         StringBuilder buf = new StringBuilder();
         int i = 0, j, ccsid;
+        boolean res = false;
+        IFSFile output_file = null;
         Util.log(Util.LOG_DEBUG, "  executeStr() started for \"%s\"", cmd);
 
         //we can not ensure absolute uniqueness of this filename; but we can, at least, to lower its probability
@@ -1127,9 +1071,10 @@ public class As400Metrics {
         Util.log(j, "  executing the CommandCall: \"%s\"", cmd);
 
         AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
+        output_file = new IFSFile(system, output);
         try {
             CommandCall command = new CommandCall(system);
-            boolean res = command.run(cmd);
+            res = command.run(cmd);
             if ( !res ) {
                 AS400Message[] messagelist = command.getMessageList();
                 for (i = 0; i < messagelist.length; ++i) {
@@ -1142,7 +1087,6 @@ public class As400Metrics {
             }//if (not success)
             Util.log(Util.LOG_DEBUG, "  CommandCall executed OK");
 
-            IFSFile output_file = new IFSFile(system, output);
             ccsid = output_file.getCCSID();
             Util.log(Util.LOG_DEBUG, "  '%s' does exist: %b, is file: %b, CCSID=%d", output, output_file.exists(), output_file.isFile(), output_file.getCCSID());
             if (!output_file.exists() || !output_file.isFile()) {
@@ -1171,16 +1115,30 @@ public class As400Metrics {
                     buf.append(line).append('\n');
                 }//while
             }//autoclose IFSFileInputStream & BufferedReader
-            try {
-                res = output_file.delete();
-                Util.log(Util.LOG_DEBUG, "  output file '%s' deleted: %b", output, res);
-            } catch (IOException ex) { ; }
             Util.log(Util.LOG_DEBUG, " executeStr() ended OK for command '%s', result is:\n%s", cmd, buf.toString());
         } catch (InterruptedException|PropertyVetoException|AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException ex) {
-            Util.log(Util.LOG_WARNING,"  executeStr(%s) error: %s", cmd, ex);
+            if ( ! (ex instanceof InterruptedException) )
+                Util.log(Util.LOG_WARNING,"  executeStr(%s) error: %s", cmd, ex);
             throw new ZbxException(ex.toString());
-        }//try-catch
+        } finally {
+            if (null != output_file && output_file.exists() && output_file.isFile()) {
+                try {
+                    res = output_file.delete();
+                    Util.log(Util.LOG_DEBUG, "  output file '%s' deleted: %b", output, res);
+                } catch (IOException ex) {
+                    Util.log(Util.LOG_WARNING, "  Error during deleting output file '%s': %s", output, ex.toString());
+                }//try-catch(IOException)
+            }//if
+        }//try-catch-finally
 
+        //trim whitespaces from the end
+        for (i = buf.length() - 1; i >= 0; i--) {
+            char c = buf.charAt(i);
+            if (Character.isWhitespace(c))
+                buf.setLength(i);
+            else
+                break;
+        }
         return buf.toString();
     }//executeStr()
 

@@ -22,6 +22,9 @@ public class Config {
            static final int TYPE_MULTISTRING   = 2;
            static final int TYPE_UINT64        = 3;
            static final int TYPE_STRING_LIST   = 4;
+           static final int CONFIG_NON_INITIALIZED = -1;
+           static final int CONFIG_INITIALIZED = 0;
+    public static final int CONFIG_CHECKED     = 1;
            static final String ip_regexp       = "[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}";
            static final boolean ZBX_KEY_ACCESS_ALLOW = true;
            static final boolean ZBX_KEY_ACCESS_DENY  = false;
@@ -141,10 +144,11 @@ public class Config {
     //static variables
     public static volatile boolean running                      = true;
     public static Hashtable<String, ZbxMetric> commands         = new Hashtable<String, ZbxMetric>();
-    private static boolean configured                           = false;
+    private static int configured                               = CONFIG_NON_INITIALIZED;
     private static Hashtable<String, ZbxAlias> aliases          = null;
     private static ArrayList<ZbxKeyAccessRule> key_access_rules = new ArrayList<ZbxKeyAccessRule>();
     public  static ZbxKeyAccessRule[] key_access_rules_array    = null;
+    private static int  timeouts                                = 0;
 
     //AS400 related variables
     private static       String asPassword      = "*CURRENT";
@@ -184,7 +188,7 @@ public class Config {
     private static int    MaxLinesPerSecond     = 100;
     private static int    RefreshActiveChecks   = 5;
     private static int    StartAgents           = 3;
-    private static int    Timeout_ms            = 3000;
+    private static long   Timeout_ms            = 3000l;
     private static ActiveCheck []activeChecks   = new ActiveCheck [0];
     //include
     private static ArrayList<String> UserParameter  = null;
@@ -221,14 +225,16 @@ public class Config {
     public static String[] getServerActive()        {return ServerActive;           }
     public static String  getSourceIP()             {return SourceIP;               }
     public static int     getStartAgents()          {return StartAgents;            }
-    public static int     getTimeout_ms()           {return Timeout_ms;             }
+    public static long    getTimeout_ms()           {return Timeout_ms;             }
     public static String  getUser()                 {return User;                   }
     public static String  getUserParameterDir()     {return UserParameterDir;       }
     public static boolean getUnsafeUserParameters() {return UnsafeUserParameters;   }
 
-    public static boolean isConfigured()            {return configured;             }
+    public static int     configured()              {return configured;             }
     public static ActiveCheck []getActiveChecks()   {return activeChecks;           }
     public static void    setActiveCheck(ActiveCheck []ac){activeChecks = ac;       }
+    public static void    incTimeouts()             { timeouts++;                   }
+    public static int     getTimeouts()             { return timeouts;              }
 
     public static ZbxMetric getZbxMetric(String key) throws ZbxException {
         ZbxMetric command = commands.get(key);
@@ -675,7 +681,7 @@ public class Config {
             StartAgents = parseInt(param_value, 1, 100);
             break;
         case "Timeout":
-            Timeout_ms = parseInt(param_value, 1, 30) * 1000;
+            Timeout_ms = parseInt(param_value, 1, 30) * 1000l;
             break;
         case "UserParameter":
             if (null == UserParameter)
@@ -756,8 +762,8 @@ public class Config {
             if (null != reader)
                 try { reader.close(); } catch (IOException ex) { ; }
         }//try-catch-finally
-
-        return (configured = ret);
+        configured = CONFIG_INITIALIZED;
+        return ret;
     }//parseConfig()
 
     public static boolean setDefaultsAndValidate(String config_file_name) {
@@ -778,6 +784,7 @@ public class Config {
                 throw new ZbxException("Could not set default value for \"User\" parameter ("
                                         + User + "): " + ex.getMessage());
             }//try-catch(set User/Password)
+            configured = CONFIG_CHECKED;
             if (null == Hostname) {
                 if (null == HostnameItem)
                     HostnameItem = "system.hostname";

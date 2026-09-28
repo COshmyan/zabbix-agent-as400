@@ -58,7 +58,7 @@ public class Util {
         if (Config.getDebugLevel() >= level) {
             try {
                 if (null == out) {
-                    if (Config.isConfigured()) {
+                    if (Config.configured() >= Config.CONFIG_INITIALIZED) {
                         outFile = new File(Config.getLogFile());
                         if (!outFile.exists()) {
                             outFile.createNewFile();
@@ -302,4 +302,39 @@ public class Util {
         return res.toString();
     }//replaceParam()
 
+    /*
+     * Quotes special symbols in item key parameter.
+     * Throws ZbxException if parameter needs to but cannot be quoted due to backslash in the end.
+     * @param param - item key parameter
+     * @param forced - 
+        2: enclose parameter in " even if it does not contain any special characters
+        1: 1 - enclose parameter in " even if it does not contain any special characters,
+               except case * when parameter ends with backslash
+        0: do nothing if the parameter does not contain any special characters
+     */
+    public static String zbxQuoteKeyParam(String param, int forced) throws ZbxException {
+        boolean req = false;
+        int len = param.length();
+        char c;
+
+        if (0 < len && ( '"' == (c = param.charAt(0)) || ' ' == c || '[' == c ||
+                param.indexOf(',') >= 0 || param.indexOf(']') >= 0 ) )
+            req = true;
+        if (!req && 0 == forced)
+            return param;
+        if (0 < len && '\\' == param.charAt(len - 1)) {
+            if (!req && 2 != forced)
+                return param;
+            else
+                throw new ZbxException("Invalid key: ends with '\\'");
+        }
+        StringBuilder buf = new StringBuilder("\"");
+        for (int i=0; i<len; i++) {
+            if ( '"' == (c = param.charAt(i)) )
+                buf.append('\\');
+            buf.append(c);
+        }//for
+        buf.append('"');
+        return buf.toString();
+    }//zbxQuoteKeyParam()
 }//class Util

@@ -112,7 +112,7 @@ public class Procstat {
                 h_data.get(0).cpu_time_used_per_tick += cpu_time_used;
             }//if
             if (0l > cpu_time_used)
-                Util.log(Util.LOG_ERROR,"ERROR: Procstat.Query.add_time(): negative value of cpu_time_used (%d)!!", cpu_time_used);
+                Util.log(Util.LOG_ERROR,"ERROR: Procstat.Query.add_time(): negative value of cpu_time_used (%d)!", cpu_time_used);
         }//add_time()
 
         synchronized Float getPercentage(int minutes, boolean allow_empty) throws ZbxException {
@@ -130,7 +130,7 @@ public class Procstat {
                 max_index = size - 1;
             time_delta = h_data.get(0).timestamp - h_data.get(max_index).timestamp;
             if (0l >= time_delta) {
-                //should be impossible!!
+                //should be impossible!
                 Util.log(Util.LOG_ERROR,"  ERROR: Query.getPercentage(): time_delta=%s, jobnum=%s, usrname=%s, jobname=%s, subsystem=%s, time_delta is zero, max_index=%d",
                         time_delta, this.jobnum, this.usrname, this.jobname, this.subsystem, max_index);
                 throw new ZbxException("There is no such job anymore");
@@ -145,7 +145,7 @@ public class Procstat {
             //percentage with 0.01% accuracy, "+0.005%" for round-up instead of fractional part truncation
             double res = ( ( ( (time_sum * 100000) / time_delta ) + 5 ) / 10 ) * 0.01;
             if (0.0 > res)
-                Util.log(Util.LOG_ERROR,"ERROR: Procstat.Query.getPercentage(): negative value of res (%f)!! time_sum=%d, time_delta=%d", res, time_sum, time_delta);
+                Util.log(Util.LOG_ERROR,"ERROR: Procstat.Query.getPercentage(): negative value of res (%f)! time_sum=%d, time_delta=%d", res, time_sum, time_delta);
             return new Float(res);
         }//getPercentage()
 

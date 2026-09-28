@@ -4,7 +4,7 @@ import as400.*;
 public class GenericMetrics {
 
     //constants
-    public static final String VERSION = "0.8.0-beta3";
+    public static final String VERSION = "0.8.0-rc1";
     public static final String VARIANT = "1";
 
     static class ActiveOnlyMetric extends ZbxMetric {
@@ -135,8 +135,6 @@ public class GenericMetrics {
                         buf.append(t.isAlive());
                         buf.append("\nState=");
                         buf.append(t.getState().toString());
-                        buf.append("\nActiveCount=");
-                        buf.append(Thread.activeCount());
                         buf.append("\nStackTrace:\n");
                         StackTraceElement []st = t.getStackTrace();
                         for (int j = 0; j < st.length; j++) {
@@ -145,8 +143,12 @@ public class GenericMetrics {
                         }
                         buf.append("----\n");
                     }//for(ServerActive)
+                    buf.append("ActiveCount=");
+                    buf.append(Thread.activeCount());
                     Runtime rt = Runtime.getRuntime();
-                    buf.append("Memory (max/total/free): ");
+                    buf.append("\nTimeout count=");
+                    buf.append(Config.getTimeouts());
+                    buf.append("\nMemory (max/total/free): ");
                     buf.append(rt.maxMemory());
                     buf.append('/');
                     buf.append(rt.totalMemory());

@@ -24,7 +24,7 @@ public class UserParamMetric extends ZbxMetric {
         } else {
             cmd = this.command;
         }//if(CF_HAVEPARAMS)
-        return new DataObject(req.getUnparsedKey(), As400Metrics.executeStr(cmd));
+        return new DataObject(req.getUnparsedKey(), As400Metrics.executeStr(cmd, As400Metrics.WAIT));
     }//process()
 
 }//class UserParamMetric

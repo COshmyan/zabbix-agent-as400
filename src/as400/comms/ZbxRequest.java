@@ -30,6 +30,7 @@ public class ZbxRequest {
     String session;
     String host_metadata;
     String host_interface;
+    String command_results;
     long   config_revision;
     ActiveCheck.ActiveBuffer data;
 
@@ -42,13 +43,15 @@ public class ZbxRequest {
         this.config_revision = config_revision;
         this.host_metadata = host_metadata;
         this.host_interface = host_interface;
+        this.command_results = null;
         this.req_type = REQUEST_CONFIG;
     }//constructor ZbxRequest()
 
-    public ZbxRequest(String session, ActiveCheck.ActiveBuffer data) {
+    public ZbxRequest(String session, ActiveCheck.ActiveBuffer data, String command_results) {
         this.session = session;
         this.data = data;
         this.req_type = REQUEST_DATA;
+        this.command_results = command_results;
     }//constructor ZbxRequest()
 
     public String getMetadata() {
@@ -94,8 +97,9 @@ public class ZbxRequest {
                 if (null != data) {
                     sb.append(",\n\"data\":[\n");
                     sb.append(org.json.simple.JSONValue.toJSONString(data));
-                    sb.append("]");
+                    sb.append("\n]");
                 }//if(data!=null)
+                sb.append(command_results);
                 long ts = Util.currentTimeMillis();
                 sb.append(",\n\"clock\":");
                 sb.append(ts / 1000);           //ms -> s

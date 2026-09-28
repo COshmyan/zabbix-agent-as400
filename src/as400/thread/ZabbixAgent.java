@@ -18,7 +18,7 @@ public class ZabbixAgent extends ZabbixThread implements As400Thread {
 
     public static DataObject zbxExecuteAgentCheck(AgentRequest req, int flags, long timeout_ms) throws ZbxException {
         DataObject ret;
-        Util.log(Util.LOG_DEBUG, "in ZabbixAgent.zbxExecuteAgentCheck(): key_name='%s', full key='%s'",
+        Util.log(Util.LOG_DEBUG, "In ZabbixAgent.zbxExecuteAgentCheck(): key_name='%s', full key='%s'",
                 req.getKeyName(), req.getUnparsedKey());
         //resolve aliases, replacing original AgentRequest by the new one
         if (0 != (flags & Util.ZBX_PROCESS_WITH_ALIAS) )
@@ -38,7 +38,7 @@ public class ZabbixAgent extends ZabbixThread implements As400Thread {
 
         if (0l == timeout_ms)
             timeout_ms = Config.getTimeout_ms();
-        req.setTimeout(timeout_ms);
+        req.setTimeout_ms(timeout_ms);
 
         try {
             ret = RequestThread.getResult(command, req);
@@ -91,7 +91,7 @@ public class ZabbixAgent extends ZabbixThread implements As400Thread {
             }//if-else(!IOException)
 
         } finally {
-            Util.log(Util.LOG_DEBUG, "end of ZabbixAgent.zbxExecuteAgentCheck()");
+            Util.log(Util.LOG_DEBUG, "End of ZabbixAgent.zbxExecuteAgentCheck()");
         }//try-catch-finally
 
         if (((As400Thread)Thread.currentThread()).isAs400CommError() && (command.getFlags() & Util.CF_AS400COMM) != 0) {
@@ -194,12 +194,13 @@ public class ZabbixAgent extends ZabbixThread implements As400Thread {
         GenericMetrics.init();
         As400Metrics.init();
 
-        try {
+//        try {
             this.initAs400();
+/*
         } catch (PropertyVetoException ex) {
             Util.log(Util.LOG_WARNING, ex, "Could not set some property for AS400 object, ignored");
         }//try-catch
-
+*/
         if (!Config.setDefaultsAndValidate(configFile)) {
             Util.log(Util.LOG_CRITICAL,"Could not validate config file '%s', exiting\n", configFile);
             Util.flushLogAndExit();

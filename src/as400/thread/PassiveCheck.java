@@ -166,7 +166,7 @@ public class PassiveCheck extends ZabbixThread {
     }//subnetMatch()
 
     private boolean checkConnection(Socket s) {
-        Util.log(Util.LOG_DEBUG,"in PassiveCheck.checkConnection()");
+        Util.log(Util.LOG_DEBUG,"In PassiveCheck.checkConnection()");
         ZbxSubnet [] hosts_allowed = Config.getHostsAllowed();
         String []buf;
 /* this check is made in Config.java during initial parsing of config file
@@ -187,13 +187,13 @@ public class PassiveCheck extends ZabbixThread {
 
             for (int j = 0; j < all_ips.length; j++) {
                 if (subnetMatch(hosts_allowed[i].getPrefixSize(), all_ips[j].getAddress(), peer_address_in_bytes)) {
-                    Util.log(Util.LOG_DEBUG,"end of PassiveCheck.checkConnection(): true");
+                    Util.log(Util.LOG_DEBUG,"End of PassiveCheck.checkConnection(): true");
                     return true;
                 }
             }//for(all_ips)
         }//for (hosts_allowed)
         Util.log(Util.LOG_WARNING,
-                "connection from '%s' rejected, it is not in the list of allowed hosts",
+                "Connection from '%s' rejected, it is not in the list of allowed hosts",
                 peer_address.getHostAddress());
         return false;
     }//checkConnection()
@@ -230,14 +230,14 @@ public class PassiveCheck extends ZabbixThread {
 
     //real processing of incoming request
     private void processListener(Socket s) {
-        Util.log(Util.LOG_DEBUG,"in PassiveCheck.process(), #%d", process_num);
+        Util.log(Util.LOG_DEBUG,"In PassiveCheck.process(), #%d", process_num);
 
         InputStream  zbxIn  = null;
         OutputStream zbxOut = null;
         String requestStr = null, responseStr = null;
 
         try {
-            s.setSoTimeout(Config.getTimeout_ms());
+            s.setSoTimeout((int)Config.getTimeout_ms());
             zbxIn  = s.getInputStream();
             zbxOut = s.getOutputStream();
             int i = -1, len = ZbxSender.header.length; //length of header only
@@ -315,7 +315,7 @@ public class PassiveCheck extends ZabbixThread {
                 try { zbxOut.close(); } catch (IOException ex) { ; }
         }//try-catch
 
-        Util.log(Util.LOG_DEBUG,"end of PassiveCheck.process(), #%d", process_num);
+        Util.log(Util.LOG_DEBUG,"End of PassiveCheck.process(), #%d", process_num);
     }//processListener()
 
 }//class PassiveCheck

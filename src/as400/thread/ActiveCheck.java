@@ -24,6 +24,9 @@ public class ActiveCheck extends ZabbixThread {
     //0x0000000100000000, it is more than max 4-bytes integer.
     //Util.long2key() processes only lower 4 bytes, so result will be equivalent 0l, i.e. MessageQueue.OLDEST
     private static final long NON_EXISTING_MESSAGE          = 4294967296l;
+    private static final long MSEC_PER_HOUR                 = 3600000l; //milliseconds per hour
+    private static final long RETRY_INTERVAL_MIN            = 2000l;
+    private static final long RETRY_INTERVAL_MAX            = 60000l;
 
     static class ActiveCheckMetric {
         //object variables
@@ -55,16 +58,11 @@ public class ActiveCheck extends ZabbixThread {
             this.nextcheck_ms    = 0l;
             this.state_unsupported   = false;
             this.error_count         = 0;
-            this.flags               = ZBX_METRIC_FLAG_NEW;
-            if (key.startsWith("log["))
-                this.flags |= ZBX_METRIC_FLAG_LOG_LOG;
-            if (key.startsWith("logrt["))
-                this.flags |= ZBX_METRIC_FLAG_LOG_LOGRT;
-            if (key.startsWith("eventlog["))
-                this.flags |= ZBX_METRIC_FLAG_LOG_EVENTLOG;
+            this.flags               = initFlags(key);
             try {
                 this.agent_request  = new AgentRequest(key);
             } catch (ZbxException ex) {
+                this.agent_request = null;
                 Util.log(Util.LOG_ERROR,"%s",ex);
             }
         }//constructor ActiveCheckMetric()
@@ -120,15 +118,132 @@ public class ActiveCheck extends ZabbixThread {
 
     }//internal class ActiveBuffer
 
+    static class ActiveCommand {
+        long id;
+        String key;
+        long timeout_ms;
+
+        private ActiveCommand(long id, String key, long timeout_ms) {
+            this.id         = id;
+            this.key        = key;
+            this.timeout_ms = timeout_ms;
+        }//constructor ActiveCommand
+    }//internal class ActiveCommand
+
+    static class ActiveCommands {
+        private ArrayList<ActiveCommand> active_commands;
+
+        private ActiveCommands() {
+            this.active_commands = new ArrayList<ActiveCommand>();
+        }//constructor ActiveCommands
+
+        private void addCommand(Hashtable<Long,Long> commands_hash, long command_id, String key, long timeout_ms) {
+            Util.log(Util.LOG_DEBUG,"In addCommand(): id=%d, timeout=%d, '%s'", command_id, timeout_ms, key);
+            if (!commands_hash.containsKey(command_id)) {
+                commands_hash.put(command_id, System.currentTimeMillis() + MSEC_PER_HOUR);//pluss 1h
+                this.active_commands.add(new ActiveCommand(command_id, key, timeout_ms));
+                Util.log(Util.LOG_DEBUG," addCommand(): added");
+            }//if
+            Util.log(Util.LOG_DEBUG,"End of addCommand()");
+        }//addCommand()
+
+        private void clear() {
+            this.active_commands.clear();
+        }//clear()
+
+        private boolean isEmpty() { return this.active_commands.isEmpty(); }
+
+        private Iterator<ActiveCommand> iterator() {
+            return this.active_commands.iterator();
+        }//elements()
+
+    }//internal class ActiveCommands
+
+    static class CommandResult {
+        long id;
+        String value;
+        boolean unsupported;
+
+        private CommandResult(long id, String value, boolean unsupported) {
+            this.id          = id;
+            this.value       = value;
+            this.unsupported = unsupported;
+        }//constructor CommandResult
+
+        private String toJSON() {
+            StringBuilder buf = new StringBuilder();
+            buf.append(" {\n  \"id\":");
+            buf.append(this.id);
+            buf.append(",\n  ");
+            if (this.unsupported) {
+                buf.append("\"error\":");
+            } else {
+                buf.append("\"value\":");
+            }//if
+            buf.append((null == this.value) ? "\"\"" : JSONValue.toJSONString(this.value));
+            buf.append("\n }");
+            return buf.toString();
+        }//toJSON()
+
+    }//internal class CommandResult
+
+    static class CommandResults {
+        private Hashtable<Long,CommandResult> command_results;
+
+        private CommandResults() {
+            this.command_results = new Hashtable<Long,CommandResult>();
+        }//constructor CommandResults
+
+        private String toJSON() {
+            if (this.command_results.isEmpty())
+                return "";
+            StringBuilder buf = new StringBuilder();
+            boolean first = true;
+            buf.append(",\n\"commands\": [");
+            for (Enumeration<CommandResult> e = this.command_results.elements(); e.hasMoreElements(); ) {
+                if (first)
+                    first = false;
+                else
+                    buf.append(',');
+                buf.append('\n');
+                buf.append(e.nextElement().toJSON());
+            }//for
+            buf.append("\n]");
+            return buf.toString();
+        }//toJSON()
+
+        private boolean isEmpty() { return this.command_results.isEmpty(); }
+
+        private void clear() {
+            this.command_results.clear();
+        }//clear()
+
+        private void put(CommandResult cr) {
+            this.command_results.put(cr.id, cr);
+        }//put()
+
+        private boolean containsKey(Long id) {
+            return this.command_results.containsKey(id);
+        }//containsKey();
+
+        private CommandResult remove(Long id) {
+            return this.command_results.remove(id);
+        }//containsKey();
+
+    }//internal class CommandResults
+
     //class ActiveCheck fields
     private ArrayList<ActiveCheckMetric> active_metrics;
-    private  Hashtable<String,ZbxRegexp> regexps;
+    private Hashtable<String,ZbxRegexp> regexps;
     private ActiveBuffer buffer;
+    private ActiveCommands active_commands;
+    private CommandResults command_results;
+    private Hashtable<Long,Long> commands_hash;
     private boolean lastRefreshActiveChecks, lastHeartbeat;
     private ZbxAddrList addrs;
     private String  orig_serverActive;
     private String  session;
-    private long    config_revision = 0l;
+    private long    config_revision_local = 0l;
     private boolean history_upload_disabled = false;
 
     public ActiveCheck(String server) throws ZbxException {
@@ -137,12 +252,26 @@ public class ActiveCheck extends ZabbixThread {
         this.active_metrics = new ArrayList<ActiveCheckMetric>();
         this.regexps = new Hashtable<String,ZbxRegexp>();
         this.buffer = new ActiveBuffer();
+        this.active_commands = new ActiveCommands();
+        this.command_results = new CommandResults();
+        this.commands_hash = new Hashtable<Long,Long>();
         this.lastRefreshActiveChecks = true;
         this.lastHeartbeat = true;
         this.addrs = new ZbxAddrList(server);
         this.orig_serverActive = server;
         this.session = Util.createToken(this.hashCode());
     }//constructor ActiveCheck()
+
+    private static byte initFlags(String key) {
+        byte flags = ZBX_METRIC_FLAG_NEW;
+        if (key.startsWith("log["))
+            flags |= ZBX_METRIC_FLAG_LOG_LOG;
+        if (key.startsWith("logrt["))
+            flags |= ZBX_METRIC_FLAG_LOG_LOGRT;
+        if (key.startsWith("eventlog["))
+            flags |= ZBX_METRIC_FLAG_LOG_EVENTLOG;
+        return flags;
+    }//initFlags()
 
     public ZbxRegexp getGlobalRegex(String name) {
         synchronized (this.regexps) {
@@ -159,6 +288,22 @@ public class ActiveCheck extends ZabbixThread {
         return min;
     }//getMinNextcheck()
 
+    private void cleanCommandHash() {
+        long now = System.currentTimeMillis();
+        Util.log(Util.LOG_DEBUG,"In cleanCommandHash() at: %d", now);
+
+        for (Iterator<Long> it = this.commands_hash.keySet().iterator(); it.hasNext(); ) {
+            Long id = it.next();
+            if (this.commands_hash.get(id) > now)
+                continue;
+            if (this.command_results.containsKey(id))
+                this.command_results.remove(id);
+            it.remove();
+            Util.log(Util.LOG_DEBUG," cleanCommandHash(): command with id=%d removed", id);
+        }//for
+        Util.log(Util.LOG_DEBUG,"End of cleanCommandHash()");
+    }//cleanCommandHash()
+
     /*
      * Add or replace the active check metric
      * @param key - item's key
@@ -171,7 +316,7 @@ public class ActiveCheck extends ZabbixThread {
     private void addCheck(String key, long itemid, long timeout_ms,
                             Interval interval, long lastlogsize, long mtime_ms) {
 
-        Util.log(Util.LOG_DEBUG,"in addCheck() key:'%s', itemid:'%d', timeout_ms: '%d', refresh_ms:%d, lastlogsize:%d, mtime_ms:%d",
+        Util.log(Util.LOG_DEBUG,"In addCheck() key:'%s', itemid:'%d', timeout_ms: '%d', refresh_ms:%d, lastlogsize:%d, mtime_ms:%d",
                 key, itemid, timeout_ms, interval.getDefaultDelay_ms(), lastlogsize, mtime_ms);
         boolean not_found = true;
         ActiveCheckMetric metric = null;
@@ -188,12 +333,21 @@ public class ActiveCheck extends ZabbixThread {
                 metric.lastlogsize  = lastlogsize;
                 metric.mtime_ms     = mtime_ms;
                 metric.error_count  = 0;
+                metric.flags        = initFlags(key);
+                try {
+                    metric.agent_request  = new AgentRequest(key);
+                } catch (ZbxException ex) {
+                    metric.agent_request = null;
+                    Util.log(Util.LOG_ERROR,"%s",ex);
+                }//try-catch
+                Util.log(Util.LOG_DEBUG,"  Key updated");
             }//if(keys are equals)
             if (!metric.interval.getStr().equals(interval.getStr())) {
                 metric.nextcheck_ms = 0l;
                 metric.interval     = interval;
             }//if
             metric.timeout_ms = timeout_ms;
+            Util.log(Util.LOG_DEBUG,"  Updated");
             break;  //found, so do not need to continue the loop
         }//for
 
@@ -209,7 +363,7 @@ public class ActiveCheck extends ZabbixThread {
                 metric.nextcheck_ms = interval.getAgentItemNextcheck_ms(itemid, new GregorianCalendar());
         }//if
 
-        Util.log(Util.LOG_DEBUG,"end of addCheck()");
+        Util.log(Util.LOG_DEBUG,"End of addCheck()");
     }//addCheck()
 
     /*
@@ -220,37 +374,62 @@ public class ActiveCheck extends ZabbixThread {
     private boolean parseListOfChecks(JSONObject jsonObj) {
         boolean ret = false;
         String name, expression, tmp, exp_delimiter;
-        long itemid, timeout_ms, lastlogsize, mtime_ms = 0l;
+        long config_revision = 0l, itemid, timeout_ms, lastlogsize, mtime_ms = 0l;
+        Object tmp_number = null;
         Interval interval;
         int type, case_sensitive;
         ArrayList<Long> received_metrics = new ArrayList<Long>();
 
-        Util.log(Util.LOG_DEBUG,"in parseListOfChecks(): [%s:%d]", this.addrs.getIp(), this.addrs.getPort());
+        Util.log(Util.LOG_DEBUG,"In parseListOfChecks(): [%s:%d]", this.addrs.getIp(), this.addrs.getPort());
 
         //parse XML element
         try {
             tmp = (String)jsonObj.get("response");
             if (!"success".equals(tmp)) {
-                tmp = (String)jsonObj.get("info");
-                Util.log(Util.LOG_WARNING," no active checks: %s", tmp);
+                if (null == tmp || "".equals(tmp)) {
+                    tmp = (String)jsonObj.get("error");
+                    if (null == tmp || "".equals(tmp)) {
+                        tmp = "cannot find tag: 'response'";
+                    }//both "response" and "error" absent
+                    Util.log(Util.LOG_ERROR," cannot parse list of active checks from [%s:%d]: %s", this.addrs.getIp(), this.addrs.getPort(), tmp);
+                } else {//response present, but not "success"
+                    tmp = (String)jsonObj.get("info");
+                    Util.log(Util.LOG_WARNING," no active checks on server [%s:%d]%s", this.addrs.getIp(), this.addrs.getPort(),
+                        (null == tmp) ? "" : (": " + tmp)
+                    );
+                }//if(response absent)
             } else {
 
-                JSONArray ja = (JSONArray)jsonObj.get("data");
-                if (null == ja) {//config did not changed, return OK
-                    if (0l == config_revision) {
-                        Util.log(Util.LOG_ERROR," cannot parse list of active checks: %s", jsonObj.toString());
-                    }
-                    return true;
-                }//if(ja==null)
+                try {
+                    tmp_number = (Number)jsonObj.get("config_revision");
+                    if (null != tmp_number) {
+                        config_revision = ((Number)tmp_number).longValue();
+                    }//if(config_revision exists)
+                } catch (ClassCastException ex) {
+                        Util.log(Util.LOG_WARNING," \"%s\" is not a valid revision", tmp_number.toString());
+                        return false;
+                }//try-catch
 
                 tmp = (String)jsonObj.get("upload");
                 history_upload_disabled = "disabled".equals(tmp);
 
-                try {
-                    config_revision = ((Number)jsonObj.get("config_revision")).longValue();
-                } catch (ClassCastException ex) {
-                    Util.log(Util.LOG_WARNING," parsing error of \"config_revision\": %s", ex.toString());
-                }//try-catch
+                JSONArray ja = (JSONArray)jsonObj.get("data");
+                if (null == ja) {//config did not changed, return OK
+                    if (0l == config_revision_local) {
+                        Util.log(Util.LOG_ERROR," cannot parse list of active checks: %s", jsonObj.toString());
+                        return false;
+                    }
+                    return true;
+                }//if(ja==null)
+
+                Util.log(Util.LOG_DEBUG,"  data parsed");
+
+                if (config_revision_local > config_revision) {
+                    active_commands.clear();
+                    command_results.clear();
+                    cleanCommandHash();
+                }
+                config_revision_local = config_revision;
 
                 for (Object o: ja) {
                     JSONObject metric = (JSONObject)o;
@@ -262,8 +441,8 @@ public class ActiveCheck extends ZabbixThread {
                         continue;
                     }//try-catch
                     try {
-                        Object timeout = metric.get("timeout");
-                        if (null != timeout && !"".equals(tmp=timeout.toString()))
+                        tmp_number = metric.get("timeout");
+                        if (null != tmp_number && !"".equals(tmp=tmp_number.toString()))
                             timeout_ms = Interval.time2long(tmp);
                         else
                             timeout_ms = Config.getTimeout_ms();
@@ -327,12 +506,90 @@ public class ActiveCheck extends ZabbixThread {
                 ret = true;
             }//if(not success)
         } catch (ClassCastException|NullPointerException ex) {
-                Util.log(Util.LOG_ERROR," cannot parse list of active checks: %s", ex);
+            Util.log(Util.LOG_ERROR," cannot parse list of active checks: %s", ex);
+        } finally {
+            Util.log(Util.LOG_DEBUG,"End of parseListOfChecks(): %b", ret);
         }//try-catch
 
-        Util.log(Util.LOG_DEBUG,"end of parseListOfChecks(): %b", ret);
         return ret;
     }//parseListOfChecks()
+
+    /*
+     * Parse list of active checks received from server
+     * @param jsonObj - JSON received from server (can be null)
+     * @return true on successful parsing, false otherwise (incorrect format of string)
+     */
+    private boolean parseListOfCommands(JSONObject jsonObj, long default_timeout_ms) {
+        boolean ret = false;
+        JSONArray ja = null;
+        String cmd, tmp, wait;
+        long timeout_ms, command_id;
+        Object tmp_number = null;
+        Util.log(Util.LOG_DEBUG,"In parseListOfCommands()");
+
+        try {
+            ja = (JSONArray)jsonObj.get("commands");
+            if (null != ja) {
+                for (Object o: ja) {
+                    JSONObject obj = (JSONObject)o;
+                    cmd            =  (String)obj.get("command");
+                    if (null == cmd || "".equals(cmd)) {
+                        Util.log(Util.LOG_WARNING, " cannot retrieve value of tag 'command'");
+                        continue;
+                    }//if
+
+                    try {
+                        tmp_number = obj.get("timeout");
+                        if (null == tmp_number || "".equals(tmp=tmp_number.toString()))
+                            timeout_ms = default_timeout_ms;
+                        else
+                            timeout_ms = ((Number)tmp_number).longValue() * 1000;//seconds -> milliseconds
+                    } catch (ClassCastException ex) {
+                        Util.log(Util.LOG_ERROR, " invalid format for \"timeout\": \"%s\"",
+                                tmp_number.toString());
+                        continue;
+                    }//try-catch
+
+                    try {
+                        cmd = Util.zbxQuoteKeyParam(cmd, 0);
+                    } catch (ZbxException ex) {
+                        Util.log(Util.LOG_WARNING, " Invalid command \"%s\"", cmd);
+                        continue;
+                    }//try-catch
+
+                    try {
+                        tmp_number = obj.get("id");
+                        command_id = ((Number)tmp_number).longValue();
+                    } catch (ClassCastException|NullPointerException ex) {
+                        Util.log(Util.LOG_WARNING, " cannot retrieve value of tag \"id\": \"%s\"",
+                                tmp_number.toString());
+                        continue;
+                    }//try-catch
+
+                    try {
+                        tmp_number = obj.get("wait");
+                        wait = (0 == ((Number)tmp_number).intValue()) ? "nowait" : "wait";
+                    } catch (ClassCastException|NullPointerException ex) {
+                        Util.log(Util.LOG_WARNING, " cannot retrieve value of tag \"wait\": \"%s\"",
+                                tmp_number.toString());
+                        continue;
+                    }//try-catch
+
+                    cmd = "system.run[" + cmd + "," + wait + "]";
+                
+                    this.active_commands.addCommand(this.commands_hash, command_id, cmd, timeout_ms);
+                }//for
+            }//if(ja!=null)
+            ret = true;
+
+        } catch (ClassCastException|NullPointerException ex) {
+            Util.log(Util.LOG_ERROR," cannot parse list of active commands: %s", ex);
+        } finally {
+            Util.log(Util.LOG_DEBUG,"End of parseListOfCommands(): %b", ret);
+        }//try-catch-finally
+
+        return ret;
+    }//parseListOfCommands()
 
     /*
      * Retrieve from Zabbix server list of active checks
@@ -343,7 +600,7 @@ public class ActiveCheck extends ZabbixThread {
         String err ="";
         JSONObject reply;
 
-        Util.log(Util.LOG_DEBUG,"in refreshActiveChecks(): host:%s, port:%d", this.addrs.getIp(), this.addrs.getPort());
+        Util.log(Util.LOG_DEBUG,"In refreshActiveChecks(): host:%s, port:%d", this.addrs.getIp(), this.addrs.getPort());
 
         String host_metadata = Config.getHostMetadata();
         if (null == host_metadata) {
@@ -383,23 +640,36 @@ public class ActiveCheck extends ZabbixThread {
                 }//if (HOST_INTERFACE_LEN)
             }//if(host_interface_item)
         }//if(host_interface)
-        ZbxRequest req = new ZbxRequest(session, config_revision, host_metadata, host_interface);
+        ZbxRequest req = new ZbxRequest(session, config_revision_local, host_metadata, host_interface);
         try {
             int level = (true != lastRefreshActiveChecks) ?  Util.LOG_DEBUG : Util.LOG_WARNING;
             reply = new ZbxSender(req, this.addrs).exchangeWithRedirect(level);
-            ret = parseListOfChecks(reply);
+            if (null != reply) {
+                ret = true;
+            } else {
+                Util.log(Util.LOG_WARNING," Received empty response from active check configuration update");
+                ret = false;
+            }//if
+            ret = ret && parseListOfChecks(reply);
+            ret = parseListOfCommands(reply, Config.getTimeout_ms()) && ret;
+            if (!ret)
+                this.addrs.failover();
         } catch (java.io.IOException ex) {
+            config_revision_local = 0l;
             err = ex.toString();
         }//try-catch
 
+        if (!ret) {
+            history_upload_disabled = true;
+            if (lastRefreshActiveChecks)
+                Util.log(Util.LOG_WARNING," active check configuration update from [%s:%d] started to fail [%s]",
+	        		this.addrs.getIp(), this.addrs.getPort(), err);
+        }//if(ret==false)
         if (ret && !lastRefreshActiveChecks)
             Util.log(Util.LOG_WARNING," active check configuration update from [%s:%d] is working again",
-			this.addrs.getIp(), this.addrs.getPort());
-        if (!ret && lastRefreshActiveChecks)
-            Util.log(Util.LOG_WARNING," active check configuration update from [%s:%d] started to fail [%s]",
-			this.addrs.getIp(), this.addrs.getPort(), err);
+    			this.addrs.getIp(), this.addrs.getPort());
         lastRefreshActiveChecks = ret;
-        Util.log(Util.LOG_DEBUG,"end of refreshActiveChecks(): %b", ret);
+        Util.log(Util.LOG_DEBUG,"End of refreshActiveChecks(): %b", ret);
 
         return ret;
     }//refreshActiveChecks()
@@ -411,7 +681,7 @@ public class ActiveCheck extends ZabbixThread {
      */
     private boolean checkResponse(JSONObject jsonObj) {
         boolean ret = false;
-        Util.log(Util.LOG_DEBUG,"in checkResponse()");
+        Util.log(Util.LOG_DEBUG,"In checkResponse()");
 
         //parse XML element
         try {
@@ -442,14 +712,21 @@ public class ActiveCheck extends ZabbixThread {
         String err = null;
         JSONObject jsonObj = null;
 
-        if (0 < buffer_count) {
-            if (Config.getBufferSize() / 2 > buffer.pcount && Config.getBufferSize() > buffer_count &&
-                            Config.getBufferSend() * 1000 > now - buffer.lastsent_ms) {
+        if (0 < buffer_count || !this.command_results.isEmpty()) {
+            if (this.command_results.isEmpty() && Config.getBufferSize() / 2 > buffer.pcount && 
+                    Config.getBufferSize() > buffer_count &&Config.getBufferSend() * 1000 > now - buffer.lastsent_ms) {
                 Util.log(Util.LOG_DEBUG," sendBuffer() now:%d lastsent:%d now-lastsent:%d BufferSend:%d; will not send now",
                             now, buffer.lastsent_ms, now - buffer.lastsent_ms, Config.getBufferSend()*1000);
             } else {
                 tryToSend = true;
-                ZbxRequest req = new ZbxRequest(session, buffer);
+                ActiveBuffer data = null;
+                if (history_upload_disabled) {
+                    Util.log(Util.LOG_WARNING," sendBuffer() cannot send buffer: server has paused history upload");
+                } else {
+                    if (0 < buffer.items.size())
+                        data = buffer;
+                }//if
+                ZbxRequest req = new ZbxRequest(session, data, this.command_results.toJSON());
                 try {
                     int level = (0l == buffer.first_error) ? Util.LOG_WARNING : Util.LOG_DEBUG;
                     jsonObj = new ZbxSender(req, this.addrs).exchangeWithRedirect(level);
@@ -469,12 +746,15 @@ public class ActiveCheck extends ZabbixThread {
                 buffer.items.clear();
                 buffer.pcount = 0;
                 buffer.lastsent_ms = now;
+                if (!this.command_results.isEmpty())
+                    this.command_results.clear();
                 if (0l != buffer.first_error) {
                     Util.log(Util.LOG_WARNING, " active check data upload to [%s:%d] is working again",
                             this.addrs.getIp(), this.addrs.getPort());
                     buffer.first_error = 0l;
                 }//if
             } else {
+                history_upload_disabled = true;
                 if (0l == buffer.first_error) {
                     Util.log(Util.LOG_WARNING, " active check data upload to [%s:%d] started to fail",
                             this.addrs.getIp(), this.addrs.getPort());
@@ -499,7 +779,7 @@ public class ActiveCheck extends ZabbixThread {
         int buffer_count = buffer.items.size();
         DataObject obj;
 
-        Util.log(Util.LOG_DEBUG,"in processValue(): host:'%s', key:'%s', itemid:%d, value:'%s'",
+        Util.log(Util.LOG_DEBUG,"In processValue(): host:'%s', key:'%s', itemid:%d, value:'%s'",
                  host, dobj.getKey(), dobj.getItemid(), dobj.getValue());
 
         synchronized (buffer) {
@@ -565,7 +845,7 @@ public class ActiveCheck extends ZabbixThread {
     private static boolean isNeededMetaUpdate(ActiveCheckMetric metric, boolean old_state_unsupported) {
         boolean ret = false;
 
-        Util.log(Util.LOG_DEBUG,"in isNeededMetaUpdate(): key:%s", metric.key);
+        Util.log(Util.LOG_DEBUG,"In isNeededMetaUpdate(): key:%s", metric.key);
         if (0 != (ZBX_METRIC_FLAG_LOG & metric.flags)) {
             //meta information update is needed if:
             //- lastlogsize or mtime changed since we last sent within this check
@@ -585,7 +865,7 @@ public class ActiveCheck extends ZabbixThread {
 
     private void processLogCheck(ActiveCheckMetric metric) throws ZbxException {
 
-        Util.log(Util.LOG_DEBUG,"in processLogCheck(): key:%s", metric.key);
+        Util.log(Util.LOG_DEBUG,"In processLogCheck(): key:%s", metric.key);
         //!!not implemented yet
         Util.log(Util.LOG_DEBUG,"End of processLogCheck()");
         throw new ZbxException("Processing of log files is not implemented yet.");
@@ -598,7 +878,7 @@ public class ActiveCheck extends ZabbixThread {
 
     private void processEventLogCheck(ActiveCheckMetric metric) throws ZbxException {
 
-        Util.log(Util.LOG_DEBUG,"in processEventLogCheck(): key:'%s', lastlogsize:%d (%08x), lastsent=%d, mtime_ms=%d, mtime_ms_sent=%d",
+        Util.log(Util.LOG_DEBUG,"In processEventLogCheck(): key:'%s', lastlogsize:%d (%08x), lastsent=%d, mtime_ms=%d, mtime_ms_sent=%d",
                 metric.key, metric.lastlogsize, metric.lastlogsize, metric.lastlogsize_sent, metric.mtime_ms, metric.mtime_ms_sent);
         try {
             As400queue as400queue = new As400queue();
@@ -608,9 +888,9 @@ public class ActiveCheck extends ZabbixThread {
             int keySeverity, maxLines, s_count = 0, p_count = 0, max_s_count, N = req.getNparam();
             ZbxRegexp regex_value, regex_source, regex_eventid, regex_user;
 
+            if (null == req)
+                throw new ZbxException("Invalid format of key: '" + metric.key + "'.");
             //parameters check; first parameter must be specified, all other - optional
-//            if (1 > N || N > 8)
-//                throw new ZbxException("Invalid number of parameters.");
             //param1: mqueue name. If not specified as fully qualified IFS path name, use default path
             if ( N < 1 || "".equals(mqueueName = req.getParam(0)) )
                 mqueueName = null;
@@ -777,7 +1057,7 @@ public class ActiveCheck extends ZabbixThread {
     private Enumeration<QueuedMessage> getMessageQueue(String mqueueName, int keySeverity, boolean skipMode, ActiveCheckMetric metric, As400queue as400queue)
             throws IllegalPathNameException, AS400SecurityException, ErrorCompletingRequestException, ObjectDoesNotExistException, PropertyVetoException, IOException, InterruptedException, ZbxException {
 
-        Util.log(Util.LOG_DEBUG,"in getMessageQueue(): mqueueName:'%s'", mqueueName);
+        Util.log(Util.LOG_DEBUG,"In getMessageQueue(): mqueueName:'%s'", mqueueName);
 
         Enumeration<QueuedMessage> mlist = null;
         as400queue.mqueue = new MessageQueue(this.system, mqueueName);
@@ -802,7 +1082,9 @@ public class ActiveCheck extends ZabbixThread {
             } else {
                 throw new ZbxException(ex.getAS400Message().getText());
             }//if
-        }//try-catch
+        } finally {
+            Util.log(Util.LOG_DEBUG,"End of getMessageQueue(): mqueueName:'%s'", mqueueName);
+        }//try-catch-finally
         return mlist;
     }//getMessageQueue()
 
@@ -810,7 +1092,7 @@ public class ActiveCheck extends ZabbixThread {
     private Enumeration<QueuedMessage> getHistoryLog(int keySeverity, boolean skipMode, ActiveCheckMetric metric, As400queue as400queue)
             throws IllegalPathNameException, AS400SecurityException, ErrorCompletingRequestException, ObjectDoesNotExistException, PropertyVetoException, IOException, InterruptedException, ZbxException {
 
-        Util.log(Util.LOG_DEBUG,"in getHistoryLog()");
+        Util.log(Util.LOG_DEBUG,"In getHistoryLog()");
 
         as400queue.hlog = new HistoryLog(this.system);
         as400queue.hlog.setMessageSeverity(keySeverity);
@@ -822,26 +1104,30 @@ public class ActiveCheck extends ZabbixThread {
             return Collections.emptyEnumeration();
         }
         as400queue.hlog.setStartingDate(new Date(metric.lastlogsize));
+        Util.log(Util.LOG_DEBUG,"End of getHistoryLog()");
         return (Enumeration<QueuedMessage>)as400queue.hlog.getMessages();
     }//getHistoryLog()
 
     private void processCommonCheck(ActiveCheckMetric metric) throws ZbxException {
 
-        Util.log(Util.LOG_DEBUG,"in processCommonCheck(): key_name='%s'", metric.key);
+        Util.log(Util.LOG_DEBUG,"In processCommonCheck(): key_name='%s'", metric.key);
+        AgentRequest req = metric.agent_request;
         try {
             DataObject result;
             if (metric.timeout_ms <= 0l) {
                 result = new DataObject(metric.key, "Unsupported timeout value.");
                 result.setStateNotsupported(true);
             } else {
-                result = ZabbixAgent.zbxExecuteAgentCheck(metric.agent_request, 0, metric.timeout_ms);
+                if (null == req)
+                    throw new ZbxException("Invalid format of key: '" + metric.key + "'.");
+                result = ZabbixAgent.zbxExecuteAgentCheck(req, 0, metric.timeout_ms);
             }
             result.setItemid(metric.itemid);
             result.setFlag(metric.flags);
             processValue(Config.getHostname(), result);
         } catch (ZbxException ex) {
-            if (isAs400CommError() && (Config.getZbxMetric(metric.agent_request.getKeyName()).getFlags() & Util.CF_AS400COMM) != 0)
-                    Util.log(Util.LOG_DEBUG," ActiveCheck.processCommonCheck(): error %s when thread is in \"communitation to AS/400 error\" state, check ignored", ex);
+            if (isAs400CommError() && null != req && (Config.getZbxMetric(req.getKeyName()).getFlags() & Util.CF_AS400COMM) != 0)
+                    Util.log(Util.LOG_DEBUG," ActiveCheck.processCommonCheck(): error %s when thread is in \"communication to AS/400 error\" state, check ignored", ex);
             else
                 throw ex;
         } finally {
@@ -849,12 +1135,38 @@ public class ActiveCheck extends ZabbixThread {
         }//try-catch
     }//processCommonCheck()
 
+    private void processCommand(ActiveCommand cmd) {
+        CommandResult cr;
+        Util.log(Util.LOG_DEBUG,"In ActiveCommand():id=%d, '%s' timeout=%dms", cmd.id, cmd.key, cmd.timeout_ms);
+        try {
+            AgentRequest req = new AgentRequest(cmd.key);
+            DataObject dobj = ZabbixAgent.zbxExecuteAgentCheck(req, 0, cmd.timeout_ms);
+            Object result = dobj.getValue();
+            if (null == result)
+                result = "";
+            cr = new CommandResult(cmd.id, result.toString(), dobj.getStateNotsupported());
+        } catch (ZbxException ex) {
+            cr = new CommandResult(cmd.id, ex.getMessage(), true);
+        }//try-catch
+        this.command_results.put(cr);
+        Util.log(Util.LOG_DEBUG,"End of ActiveCommand()");
+    }//processCommand()
+
+    private void processActiveCommands() {
+        Util.log(Util.LOG_DEBUG,"In processActiveCommands() server:'%s' port:%d", this.addrs.getIp(), this.addrs.getPort());
+        for (Iterator<ActiveCommand> it = this.active_commands.iterator(); it.hasNext(); )
+           processCommand(it.next());
+        this.active_commands.clear();
+        sendBuffer();
+        Util.log(Util.LOG_DEBUG,"End of processActiveCommands()");
+    }//processActiveCommands()
+
     private void processActiveChecks() {
         boolean ret;
         GregorianCalendar cal = new GregorianCalendar();
         long now = cal.getTimeInMillis();
 
-        Util.log(Util.LOG_DEBUG,"in processActiveChecks() server:'%s' port:%d", this.addrs.getIp(), this.addrs.getPort());
+        Util.log(Util.LOG_DEBUG,"In processActiveChecks() server:'%s' port:%d", this.addrs.getIp(), this.addrs.getPort());
         for (ActiveCheckMetric metric: active_metrics) {
             if (!Config.running)
                 break;
@@ -965,7 +1277,7 @@ public class ActiveCheck extends ZabbixThread {
     private void sendHeartbeatMsg() {
         ZbxRequest req = new ZbxRequest();
 
-        Util.log(Util.LOG_DEBUG,"in sendHeartbeatMsg()");
+        Util.log(Util.LOG_DEBUG,"In sendHeartbeatMsg()");
 
         try {
             int level = (true != lastHeartbeat) ?  Util.LOG_DEBUG : Util.LOG_WARNING;
@@ -981,12 +1293,12 @@ public class ActiveCheck extends ZabbixThread {
             lastHeartbeat = false;
         }//try-catch
 
-        Util.log(Util.LOG_DEBUG,"end of sendHeartbeatMsg()");
+        Util.log(Util.LOG_DEBUG,"End of sendHeartbeatMsg()");
     }//sendHeartbeatMsg()
 
     public void run() {
         long nextcheck = 0l, nextrefresh = 0l, nextsend = 0l, heartbeat_nextcheck = 0l, now,
-             delta, lastcheck = 0l;
+             delta, lastcheck = 0l, lash_cmd_hash_check = 0l, retry_after = 0l;
 
         Util.log(Util.LOG_INFO,"agent #%d (%s) started [%s #%d]", server_num, orig_serverActive,
                 Thread.currentThread().getName(), server_num + 1);
@@ -1005,17 +1317,28 @@ public class ActiveCheck extends ZabbixThread {
                 if (0l != heartbeat_nextcheck && now >= heartbeat_nextcheck) {
                     heartbeat_nextcheck = now + Config.getHeartbeatFrequency() * 1000;
                     sendHeartbeatMsg();
-                }
+                }//if(heartbeat)
 
                 if (now >= nextrefresh) {
-                    if (refreshActiveChecks()) {
+                    if (refreshActiveChecks()) {//OK
                         nextrefresh = System.currentTimeMillis() + 
-                                        Config.getRefreshActiveChecks() * 1000; //OK
+                                        Config.getRefreshActiveChecks() * 1000;
                         nextcheck = 0l;
-                    } else {
-                        nextrefresh = System.currentTimeMillis() + 60000l;      //Fail
+                        if (0 != retry_after)
+                            retry_after = 0;
+                    } else {//Fail
+                        retry_after = (0 == retry_after) ? RETRY_INTERVAL_MIN : (retry_after * 2);
+                        if (retry_after > RETRY_INTERVAL_MAX)
+                            retry_after = RETRY_INTERVAL_MAX;
+                        nextrefresh = System.currentTimeMillis() + retry_after;
                     }//if(refreshActiveChecks())
+                } else if (history_upload_disabled && nextrefresh > now + RETRY_INTERVAL_MAX) {
+                    retry_after = RETRY_INTERVAL_MIN;
+                    nextrefresh = now + retry_after;
                 }//if(nextrefresh)
+
+                if (!this.active_commands.isEmpty())
+                    processActiveCommands();
 
                 if (now >= nextcheck && Config.getBufferSize() / 2 > buffer.pcount) {
                     processActiveChecks();
@@ -1025,7 +1348,7 @@ public class ActiveCheck extends ZabbixThread {
                     }//if
                     nextcheck = getMinNextcheck();
                     if (nextcheck <= 0l)
-                        nextcheck = System.currentTimeMillis() + 60000l;
+                        nextcheck = System.currentTimeMillis() + RETRY_INTERVAL_MAX;
                 } else {
                     if (0l > (delta = now - lastcheck)) {
                         Util.log(Util.LOG_WARNING,
@@ -1044,6 +1367,11 @@ public class ActiveCheck extends ZabbixThread {
                     }//try-catch
                 }//if(nextrefresh)
                 lastcheck = now;
+
+                if (now > (lash_cmd_hash_check + MSEC_PER_HOUR)) {//pluss 1 hour (in milliseconds)
+                    cleanCommandHash();
+                    lash_cmd_hash_check = now;
+                }
 
             }//while(main loop)
         } catch (Throwable ex) {

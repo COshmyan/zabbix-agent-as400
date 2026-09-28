@@ -37,15 +37,32 @@ public class RequestThread extends Thread implements As400Thread {
         RequestThread rt = new RequestThread(command, req);
         try {
             rt.start();
-            rt.join(req.getTimeout());
+            rt.join(req.getTimeout_ms());
             if (rt.completed) {
                 if (null != rt.ret)
                     return rt.ret;
                 else
                     throw rt.e;
             } else {
+                Config.incTimeouts();
                 rt.interrupt();
-                throw new ZbxException("Timeout " + req.getTimeout()/1000 + " seconds expired.");
+                Thread.sleep(500);//give the child thread a chance to die gracefully
+                ZabbixThread zt = (ZabbixThread)Thread.currentThread();
+                Util.log(Util.LOG_WARNING, "getResult(): before disconnectAllServices()");
+                zt.getAs400().disconnectAllServices();  //disconnect all services from current connection
+                Util.log(Util.LOG_WARNING, "getResult(): after disconnectAllServices()");
+/*
+ We tried to throw away the old AS400 object and create a new one to be sure.
+ However, it has a very bad side effect: memory leak.
+ The JTOpen library stores hard references to all AS400 objects created (for efficiency) to reuse them,
+ even if we do not want it. In result, these objects are not released by JVM Garbage Collector.
+ In addition, each AS400 object contains its own structures needed to support connections and results
+ of requests until they are readed by application (even if we do not need it anymore).
+ So: DO NOT RECREATE AS400 objects, reuse existing ones!
+ Just close all connections (they are re-opened if necessary).
+*/
+//                zt.initAs400();                         //and reinitialize the AS400 object for safety
+                throw new ZbxException("Timeout " + req.getTimeout_ms()/1000 + " seconds expired.");
             }
         } catch (Exception ex) {
             throw new ZbxException(ex.toString());

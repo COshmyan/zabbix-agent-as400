@@ -5,7 +5,8 @@ import java.util.regex.*;
 public class AgentRequest {
 
     //static class variables
-    static final Pattern key_pattern = Pattern.compile("([-0-9a-zA-Z_\\.]+)(?:\\[(.*)\\])?");
+//    static final Pattern key_pattern = Pattern.compile("([-0-9a-zA-Z_\\.]+)(?:\\[(.*)\\])?");
+    static final Pattern key_pattern = Pattern.compile("^([-0-9a-zA-Z_\\.]+)(?s:\\[(.*)\\])?$");
 
     //class fields
     String              unparsed_key;
@@ -121,13 +122,13 @@ public class AgentRequest {
         return this.params.size();
     }//getNparam()
 
-    public long getTimeout() {
+    public long getTimeout_ms() {
         return this.timeout_ms;
-    }//getTimeout()
+    }//getTimeout_ms()
 
-    public void setTimeout(long timeout_ms) {
+    public void setTimeout_ms(long timeout_ms) {
         this.timeout_ms = timeout_ms;
-    }//setTimeout
+    }//setTimeout_ms
 
     //either 'key[]' or 'key[""]', but not 'key'
     public boolean emptyArguments() {

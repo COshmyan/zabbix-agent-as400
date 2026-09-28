@@ -76,7 +76,7 @@ public class ZbxSender {
     }//checkHeader()
 
     private boolean tcpConnectFailover(int level, ZbxAddrList addrs) {
-        Util.log(Util.LOG_DEBUG," in tcpConnectFailover()");
+        Util.log(Util.LOG_DEBUG," In tcpConnectFailover()");
         String zbxServer = null;
         int zbxPort = 0;
         boolean rc = false;
@@ -88,7 +88,7 @@ public class ZbxSender {
                 zbxPort   = addrs.getPort();
                 Util.log(Util.LOG_DEBUG,"  connecting to server '%s:%d'", zbxServer, zbxPort);
                 this.zbxSocket = new Socket();
-                zbxSocket.setSoTimeout(Config.getTimeout_ms());
+                zbxSocket.setSoTimeout((int)Config.getTimeout_ms());
                 try {
                     zbxSocket.setReuseAddress(true);    //try to enable SO_REUSEADDR socket option
                 } catch (SocketException ex) { ; }
@@ -101,7 +101,7 @@ public class ZbxSender {
                     }//try-catch
                 }//if
                 try {
-                    zbxSocket.connect(new InetSocketAddress(zbxServer, zbxPort), Config.getTimeout_ms());
+                    zbxSocket.connect(new InetSocketAddress(zbxServer, zbxPort), (int)Config.getTimeout_ms());
                     rc = zbxSocket.isConnected();
                     break;
                 } catch (IOException ex) {
@@ -116,13 +116,13 @@ public class ZbxSender {
             this.addrs.setErr(ex.getMessage());
             Util.log(Util.LOG_ERROR, ex, "Error connecting to '%s:%d'", zbxServer, zbxPort);
         } finally {
-            Util.log(Util.LOG_DEBUG," end of tcpConnectFailover(); rc=%b", rc);
+            Util.log(Util.LOG_DEBUG," End of tcpConnectFailover(); rc=%b", rc);
         }
         return rc;
     }//tcpConnectFailover()
 
     public String send() throws IOException {
-        Util.log(Util.LOG_DEBUG," in send()");
+        Util.log(Util.LOG_DEBUG," In send()");
 
         try {
             zbxIn  = zbxSocket.getInputStream();
@@ -151,7 +151,7 @@ public class ZbxSender {
         } finally {
             if (null != zbxSocket)
                 zbxSocket.close();
-            Util.log(Util.LOG_DEBUG," end of send(); got [%s]", zbxRes);
+            Util.log(Util.LOG_DEBUG," End of send(); got [%s]", zbxRes);
         }//try-catch-finally
     }//send()
 
@@ -204,7 +204,7 @@ public class ZbxSender {
         String str;
         int redirect_rc = ZBX_REDIRECT_NONE, retries = 0;
 
-        Util.log(Util.LOG_DEBUG,"in exchangeWithRedirect()");
+        Util.log(Util.LOG_DEBUG,"In exchangeWithRedirect()");
         conn_ret = tcpConnectFailover(level, this.addrs);
 
         try {
@@ -262,7 +262,7 @@ public class ZbxSender {
         return jsonObj;
 
         } finally {
-            Util.log(Util.LOG_DEBUG,"end of exchangeWithRedirect()");
+            Util.log(Util.LOG_DEBUG,"End of exchangeWithRedirect()");
         }
 
     }//exchangeWithRedirect()
