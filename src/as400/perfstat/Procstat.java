@@ -206,6 +206,9 @@ public class Procstat {
             jl.clearJobAttributesToRetrieve();
             jl.addJobAttributeToRetrieve(Job.SUBSYSTEM);
             jl.addJobAttributeToRetrieve(Job.CPU_TIME_USED_LARGE);
+            //It is not guaranted that implicit call of load() method from jl.getJobs() throws an exception upon communication errors,
+            //therefore we performs this call explicitly
+            jl.load();
             Enumeration jobs = jl.getJobs();
             long current_ts = System.currentTimeMillis();
 

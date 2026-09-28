@@ -154,11 +154,11 @@ public class As400Metrics {
             //proc.num[<name>,<user>,<state>,<cmdline>]
             new ZbxMetric("proc.num", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
+                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s",req.getKeyName());
                     int N = req.getNparam(), ret = 0;
                     if (N > 4)
                         throw new ZbxException("Bad request: maximum 4 parameters supported");
                     AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
-                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s",req.getKeyName());
                     String curPar = null;
                     JobList jl = new JobList(system);
                     try {
@@ -206,6 +206,9 @@ public class As400Metrics {
                                 jl.addJobSelectionCriteria(JobList.SELECTION_ACTIVE_JOB_STATUS,         curPar);
                             }//switch-case
                         }//state
+                        //implicit call of load() method from jl.getLength() does not throw any exceptions upon communication errors,
+                        //therefore we performs this call explicitly
+                        jl.load();
                         //4-th parameter: <subsystem>
                         if ( N<4 || "".equals(curPar = req.getParam(3)) ) {
                             //curPar = null;

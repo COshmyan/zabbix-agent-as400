@@ -55,6 +55,8 @@ public class PassiveCheck extends ZabbixThread {
                         }//if
                     }//sync
                     if (null != t) {
+                        Util.log(Util.LOG_DEBUG, " connection will be processes by thread %d [%s #%d]",
+                                t.getId(), t.getName(), t.process_num);
                         synchronized (t) {
                             t.s = s;
                             t.notify();
@@ -85,15 +87,15 @@ public class PassiveCheck extends ZabbixThread {
 
         Util.log(Util.LOG_INFO,"%s #%d started [%s #%d]", "agent", server_num, Thread.currentThread().getName(), this.process_num);
 
-        while (Config.running) {
-            synchronized (this) {
+        synchronized (this) {
+            while (Config.running) {
                 try {
                     wait ();
                     if (null != this.s) {
                         if (checkConnection(s))
                             process (s);
-                        if (null != s)
-                            try { s.close(); } catch (IOException ex) { ; }
+                        //if (null != s)
+                        try { s.close(); } catch (IOException ex) { ; }
                         s = null;
                         synchronized (proc_avail) {
                             proc_avail.add(this);
@@ -107,8 +109,8 @@ public class PassiveCheck extends ZabbixThread {
                     Config.running = false;
                     continue;
                 }//try-catch
-            }//sync
-        }//while(main loop)
+            }//while(main loop)
+        }//sync
 
         try {
 /*
