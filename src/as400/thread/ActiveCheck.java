@@ -658,6 +658,7 @@ public class ActiveCheck extends ZabbixThread {
         try {
             DataObject result = ZabbixAgent.process(metric.agent_request);
             result.setFlag(metric.flags);
+            result.setKey (metric.key_orig);
             processValue(Config.getHostname(), result);
         } finally {
             Util.log(Util.LOG_DEBUG,"End of processCommonCheck()");
@@ -670,7 +671,8 @@ public class ActiveCheck extends ZabbixThread {
 
         Util.log(Util.LOG_DEBUG,"in processActiveChecks() server:'%s' port:%d", serverActive, serverActivePort);
         for (ActiveCheckMetric metric: active_metrics) {
-            //
+            if (!Config.running)
+                break;
             if (now < metric.nextcheck_ms)
                 continue;
             if (!isMetricReadyToProcess(metric))

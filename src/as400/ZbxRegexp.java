@@ -77,7 +77,7 @@ public class ZbxRegexp {
     public ZbxRegexp(String str, boolean case_sensitive) {
         this.name = str;
 
-        if (null != str && '@' == str.charAt(0)) {
+        if (null != str && 0 < str.length() && '@' == str.charAt(0)) {
             str = str.substring(1);
             ZbxRegexp globalRegex = null;
             try {
@@ -94,7 +94,7 @@ public class ZbxRegexp {
             int flags = Pattern.UNICODE_CASE | Pattern.UNICODE_CHARACTER_CLASS;
             if (!case_sensitive)
                 flags |= Pattern.CASE_INSENSITIVE;
-            this.pattern = (null == str) ? null : Pattern.compile(".*" + str + ".*", flags);
+            this.pattern = (null == str || "".equals(str)) ? null : Pattern.compile(".*" + str + ".*", flags);
             this.subexpr_list = null;
         }//if (global RE)
     }//constructor ZbxRegexp()

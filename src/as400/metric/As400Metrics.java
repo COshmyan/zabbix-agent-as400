@@ -1,5 +1,6 @@
 package as400.metric;
 import as400.*;
+import as400.perfstat.*;
 import as400.thread.ZabbixThread;
 import com.ibm.as400.access.*;
 import com.ibm.as400.data.*;
@@ -441,7 +442,6 @@ public class As400Metrics {
         try {
             new ZbxMetric("vfs.fs.discovery", 0) {
                 public DataObject process(AgentRequest req) throws ZbxException {
-//                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {
                         return new DataObject(req.getUnparsedKey(), QYASPOL.process_asp_discovery());
@@ -462,7 +462,6 @@ public class As400Metrics {
                         throw new ZbxException("Bad request: parameters FS needed");
                     if (2 > req.getNparam() || "".equals(mode = req.getParam(1)))
                         mode = "total";
-//                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {
                         return new DataObject(req.getUnparsedKey(),
@@ -479,7 +478,6 @@ public class As400Metrics {
         try {
             new ZbxMetric("as400.disk.discovery", 0) {
                 public DataObject process(AgentRequest req) throws ZbxException {
-//                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {
                         return new DataObject(req.getUnparsedKey(), QYASPOL.process_dsk_discovery());
@@ -501,7 +499,6 @@ public class As400Metrics {
                     if (2 > req.getNparam() || "".equals(mode = req.getParam(1)))
                         mode = "total";
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
-//                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
                     try {
                         switch (mode) {
                         case "total":
@@ -530,10 +527,106 @@ public class As400Metrics {
                     if (1 > req.getNparam() || "".equals(fs = req.getParam(0)))
                         throw new ZbxException("Bad request: parameters FS needed");
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
-//                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
                     try {
                             return new DataObject(req.getUnparsedKey(),
                                         QYASPOL.process_dsk(fs, "state"));
+                    } finally {
+                        Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
+                    }
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+/*
+        //This part tried to use QGYOLJOB AS/400 API to collect native CPU usage statistics
+        //(for elapsed time); however it looks that it's impossible from Java as it starts
+        //a new short-term monitoring job every time. In result, the elapsed time and all
+        //statistics for an "elapsed time" always returns zero's.
+        //We use just a total usage time for each job and produce own calculations in Procstat class.
+        try {
+            new ZbxMetric("as400.job.discovery", 0) {
+                public DataObject process(AgentRequest req) throws ZbxException {
+                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
+                    try {
+                        return new DataObject(req.getUnparsedKey(), qgyoljob.process_job_discovery());
+                    } finally {
+                        Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
+                    }
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+*/
+        try {
+            new ZbxMetric("proc.cpu.util.discovery", Util.CF_HAVEPARAMS) {
+                public DataObject process(AgentRequest req) throws ZbxException {
+                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
+                    int seconds = 0;
+                    String tmp;
+                    if (1 > req.getNparam() || "".equals(tmp = req.getParam(0)))
+                        throw new ZbxException("Bad request: the first parameter needed");
+                    try {
+                        seconds = Integer.parseInt(tmp);
+                        if (1 >= seconds)
+                            throw new ZbxException("");
+                    } catch (NumberFormatException|ZbxException ex) {
+                            throw new ZbxException("Invalid parameter '" + tmp + "': must be a number more than 1");
+                    }//try-catch
+                    try {
+                        return new DataObject(req.getUnparsedKey(), Procstat.jobDiscovery(seconds));
+                    } finally {
+                        Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
+                    }
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+
+        try {
+            new ZbxMetric("proc.cpu.util", Util.CF_HAVEPARAMS) {
+                public DataObject process(AgentRequest req) throws ZbxException {
+                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
+                    int N = req.getNparam(), mode = 0;
+                    String jobname, usrname, jobnum, subsystem, tmp;
+                    //1-st parameter: <name>
+                    jobname = N<1 ? "" : req.getParam(0);
+                    //2-st parameter: <user>
+                    usrname = N<2 ? "" : req.getParam(1);
+                    //3-st parameter: <type> (not used)
+                    tmp = N<3 ? "" : req.getParam(2);
+                    switch (tmp) {
+                        case "":
+                        case "total":
+                        case "user" :
+                        case "system":
+                            break;
+                        default:
+                            throw new ZbxException("Invalid <type> parameter: '" + tmp + "'");
+                    }//switch-case
+                    //4-st parameter: <subsystem> (RE)
+                    subsystem =  N<4 ? "" : req.getParam(3);
+                    //5-st parameter: <mode>
+                    tmp = N<5 ? "" : req.getParam(4);
+                    switch (tmp) {
+                        case "":
+                        case "avg1":
+                            mode = 1; break;
+                        case "avg5" :
+                            mode = 5; break;
+                        case "avg15":
+                            mode = 15; break;
+                        default:
+                            throw new ZbxException("Invalid <mode> parameter: '" + tmp + "'");
+                    }//switch-case
+                    //6-st parameter: <jobnum>
+                    jobnum = N<6 ? "" : req.getParam(5);
+
+                    try {
+                        return new DataObject(req.getUnparsedKey(), Procstat.getPercentage(mode,
+                                              jobnum, usrname, jobname, subsystem));
                     } finally {
                         Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
                     }

@@ -35,6 +35,8 @@ public class ZabbixAgent extends ZabbixThread {
         try { t.join(10000); } catch (InterruptedException ex) { ; }
         ZabbixThread cc = new ZbxCacheControllerThread();
         cc.start();
+        ZabbixThread collector = new CollectorThread();
+        collector.start();
 
         try {
             String []ServerActive = Config.getServerActive();
@@ -45,8 +47,10 @@ public class ZabbixAgent extends ZabbixThread {
                 }//for(ServerActive)
             }//if (ServerActive)
             PassiveCheck.init();
+            collector.interrupt();
+            try { collector.join(500); } catch (InterruptedException ex) { ; }
             cc.interrupt();
-            try { cc.join(1000); } catch (InterruptedException ex) { ; }
+            try { cc.join(500); } catch (InterruptedException ex) { ; }
         } catch (Exception ex) {
 	        Util.log(Util.LOG_DEBUG, "Exception: %s", ex);
         } finally {

@@ -71,6 +71,11 @@ public class Util {
         }//if
     }//log()
 
+    public static synchronized void log(int level, Exception ex, String message, Object... args) {
+        log(level, message, args);
+        ex.printStackTrace(out);
+    }//log()
+
     private static void rotateLog() {
         out.close();
         out = null;

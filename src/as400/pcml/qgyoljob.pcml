@@ -1,0 +1,113 @@
+<pcml version="1.0">
+
+  <struct name="oljb0300" outputsize ="listInfo.rcdLength">
+    <data name="jobName"           type="char" length="10" />
+    <data name="userName"          type="char" length="10"/>
+    <data name="jobNumber"         type="char" length="6" />
+    <data name="activeJobStatus"   type="char" length="4"/>
+    <data name="jobType"           type="char" length="1" />
+    <data name="jobSubtype"        type="char" length="1" />
+    <data name="totalDataLength"   type="int"  length="4" />
+    <data                          type="char" length="4" />
+    <data name="cpuTimeTotal"      type="int"  length="8"/>
+<!-- -->
+    <data name="cpuUsedPercentage" type="int"  length="4"/>
+    <data name="cpuUsedElapsed"    type="int"  length="8"/>
+<!-- -->
+  </struct>
+
+  <struct name="receiverDef">
+    <data name="nbrFields"    type="int"  length="4" />
+    <struct name="fields" count="nbrFields">
+      <data name="fieldInfoLength"  type="int"  length="4" />
+      <data name="keyField"         type="int"  length="4" /><!-- for OLJB0300 -->
+      <data name="dataType"         type="char" length="1" />
+      <data                         type="char" length="3" />
+      <data name="dataLength"       type="int"  length="4" />
+      <data name="dataDisplacement" type="int"  length="4" />
+    </struct>
+  </struct>
+
+  <struct name="listInfo" outputsize="80">
+    <data name="totalRcds"    type="int"  length="4" />
+    <data name="rcdsReturned" type="int"  length="4" />
+    <data name="rqsHandle"    type="byte" length="4" />
+    <data name="rcdLength"    type="int"  length="4" />
+    <data name="infoComplete" type="char" length="1" />
+    <data name="dateCreated"  type="char" length="7" />
+    <data name="timeCreated"  type="char" length="6" />
+    <data name="listStatus"   type="char" length="1" />
+    <data                     type="byte" length="1" />
+    <data name="lengthOfInfo" type="int"  length="4" />
+    <data name="firstRecord"  type="int"  length="4" />
+    <data                     type="byte" length="40" />
+  </struct>
+
+  <struct name="sorting">
+    <data name="nbrKeys"    type="int"  length="4" init="1"/>
+    <struct name="keys" count="nbrKeys">
+      <data name="keyFieldStartPos" type="int"  length="4" init="41" />
+      <data name="keyFieldLength"   type="int"  length="4" init="8" />
+      <data name="keyFieldDataType" type="int"  length="2" init="9" /><!-- 9="unsigned binary", see http://www.ibm.com/support/knowledgecenter/en/ssw_ibm_i_71/apis/QLGSORT.htm -->
+      <data name="sortOrder"        type="char" length="1" init="2" /><!-- descending -->
+      <data                         type="byte" length="1" init="0" />
+    </struct>
+  </struct>
+
+  <struct name="filter">
+    <data name="jobName"                type="char" length="10" init="*ALL" />
+    <data name="userName"               type="char" length="10" init="*ALL" />
+    <data name="jobNumber"              type="char" length="6"  init="*ALL" />
+    <data name="jobType"                type="char" length="1"  init="*" />
+    <data                               type="byte" length="1" init="0" />
+    <data name="offPriJobStatus"        type="int"  length="4" init="0" />
+    <data name="nbrPriJobStatus"        type="int"  length="4" init="0" />
+    <data name="offActJobStatus"        type="int"  length="4" init="0" />
+    <data name="nbrActJobStatus"        type="int"  length="4" init="0" />
+    <data name="offJobsOnJobQStatus"    type="int"  length="4" init="0" />
+    <data name="nbrJobsOnJobQStatus"    type="int"  length="4" init="0" />
+    <data name="offJobQNames"           type="int"  length="4" init="0" />
+    <data name="nbrJobQNames"           type="int"  length="4" init="0" />
+    <data name="priJobStatus"           type="char" length="10" count="nbrPriJobStatus" />
+    <data name="actJobStatus"           type="char" length="4"  count="nbrActJobStatus" />
+    <data name="jobsOnJobQStatus"       type="char" length="10" count="nbrJobsOnJobQStatus" />
+    <data name="jobQNames"              type="char" length="20" count="nbrJobQNames" />
+  </struct>
+
+  <struct name="genReturnData">
+    <data name="bytesReturned"  type="int"  length="4" />
+    <data name="bytesAvailable" type="int"  length="4" />
+    <data name="elapsedTime"    type="int"  length="8" precision="64" />
+    <data                       type="char" length="10" />
+  </struct>
+
+  <!-- <program name="qyaspol" path="/QSYS.lib/QGY.lib/qyaspol.pgm" parseorder="listInfo receiver"> -->
+  <program name="qgyoljob-oljb0300" path="/QSYS.LIB/qgyoljob.pgm" parseorder="listInfo receiver receiverDef">
+    <data name="receiver"       type="struct" struct="oljb0300"     usage="output"
+        count="listInfo.rcdsReturned" outputsize="receiverlength" />
+    <data name="receiverlength" type="int"    length="4"            usage="input" init="16384" />
+    <data name="format"         type="char"   length="8"            usage="input" init="OLJB0300" />
+    <data name="receiverDef"    type="struct" struct="receiverDef"  usage="output" outputsize="recDefLength" />
+    <data name="recDefLength"   type="int"    length="4"            usage="input" init="16384" />
+    <data name="listInfo"       type="struct" struct="listInfo"     usage="output" />
+    <data name="nbrrcd"         type="int"    length="4"            usage="input" init="50" />
+    <data name="sorting"        type="struct" struct="sorting"      usage="input" />
+    <data name="filter"         type="struct" struct="filter"       usage="input" />
+    <data name="filterLength"   type="int"    length="4"            usage="input" init="60" />
+    <!-- Numer of returned fields. We want (for each job):
+         312 bin(8) CPU time (ms) used total
+         314 bin(4) CPU used (tenths of %) during elapsed time
+         315 bin(8) CPU used (ms) during elapsed time
+     -->
+    <data name="nbrfieldstoret" type="int"    length="4"            usage="input" init="3" />
+    <!-- It's impossible to initialize an array by a set of different values in PCML document,
+         so the "fieldstoreturn" must be initialized in a program   -->
+    <data name="fieldstoreturn" type="int"    length="4"             usage="input" count="nbrfieldstoret" /><!-- init="312"  -->
+    <data name="errorCode"      type="int"    length="4"             usage="input" init="0"  />
+    <data name="jobSelFormat"   type="char"   length="8"             usage="input" init="OLJS0100" />
+    <data name="resetStats"     type="char"   length="1"             usage="input" init="0"  />
+    <data name="genReturnData"  type="struct" struct="genReturnData" usage="output" outputsize="genRetDataLen" />
+    <data name="genRetDataLen"  type="int"    length="4"             usage="input" init="16384"  />
+  </program>
+
+</pcml>

@@ -2,7 +2,7 @@
 set JAVA_HOME=C:\JBuilderX\jdk1.8.0_20
 rem set CP=classes;lib\jt400.jar;lib\json-simple-1.1.1.jar
 set CP=lib\jt400.jar;lib\json-simple-1.1.1.jar
-set SOURCES=src\as400\*.java src\as400\metric\*.java src\as400\thread\*.java src\as400\cache\*.java
+set SOURCES=src\as400\*.java src\as400\metric\*.java src\as400\thread\*.java src\as400\cache\*.java src\as400\perfstat\*.java
 set TARGET=classes
 if exist %TARGET%\as400 rmdir %TARGET%\as400 /s /q
 del /Q %TARGET%\*.class lib\ZabbixAgent.jar 2>nul

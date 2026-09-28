@@ -4,7 +4,7 @@ import as400.cache.*;
 import as400.thread.*;
 import com.ibm.as400.access.*;
 import com.ibm.as400.data.*;
-//import java.io.*;
+import java.io.*;
 import java.util.*;
 //import java.beans.PropertyVetoException;
 
@@ -54,6 +54,15 @@ class QYASPOL {
                 AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
 
                 Util.log(Util.LOG_DEBUG, "  Constructing the ProgramCallDocument");
+/*
+                try {
+                    Trace.setFileName("C:\\workfiles\\as400\\debug_pcml_qyaspol.txt");
+                } catch (IOException ex) {
+                    Util.log(Util.LOG_ERROR, " Error " + ex);
+                }//try-catch
+                Trace.setTraceOn(true);
+                Trace.setTracePCMLOn(true);
+*/
                 ProgramCallDocument pcml = new ProgramCallDocument(system, "as400.pcml.qyaspol");
                 Util.log(Util.LOG_DEBUG, "  Call...");
                 boolean rc = pcml.callProgram("qyaspol-yasp0200");
@@ -93,6 +102,7 @@ class QYASPOL {
                 Util.log(Util.LOG_WARNING,"  QYASPOL.aspCacheFiller.fill() error: %s", ex);
                 throw new ZbxException(ex.getMessage());
             } finally{
+                //Trace.setTraceOn(false);
                 Util.log(Util.LOG_DEBUG, " QYASPOL.aspCacheFiller.fill() ended");
             }//try-catch-finally
 

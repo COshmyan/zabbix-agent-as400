@@ -55,7 +55,7 @@ public class ZbxCache {
     public synchronized void clear() {
         this.ht.clear();
         this.expired = 0l;
-        Util.log(Util.LOG_DEBUG, "ZbxCache.clear(): cache %s cleared", this.name);
+        Util.log(Util.LOG_DEBUG, " ZbxCache.clear(): cache %s cleared", this.name);
     }//clear()
 
     public synchronized void putEntry(String key, ZbxCacheEntry entry) {

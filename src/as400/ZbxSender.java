@@ -108,15 +108,18 @@ public class ZbxSender{
                 //read the length of real datas
                 Util.log(Util.LOG_DEBUG,"ZBXD header is OK, data length=%d",len);
                 respData = new byte[len];
-                read = zbxIn.read(respData);
-                String jsonString = new String(respData);
-                zbxRes = jsonString;
-            }
-            Util.log(Util.LOG_DEBUG,"End of send()");
+                int off = 0;
+                while (0 < (read = zbxIn.read(respData, off, len)) ) {
+                    off += read;
+                    len -= read;
+                }//while
+                zbxRes = new String(respData, Util.getUtf8());
+            }//if(header is OK)
             return zbxRes;
         } finally {
             if (null!=zbxSocket)
                 zbxSocket.close();
+            Util.log(Util.LOG_DEBUG,"End of send()");
         }//try-catch-finally
     }//send()
 
