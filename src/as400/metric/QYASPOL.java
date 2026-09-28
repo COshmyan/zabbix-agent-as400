@@ -50,9 +50,8 @@ class QYASPOL {
         public void fill() throws ZbxException {
             Util.log(Util.LOG_DEBUG, " QYASPOL.aspCacheFiller.fill() started");
 
+            AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
             try {
-                AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
-
                 Util.log(Util.LOG_DEBUG, "  Constructing the ProgramCallDocument");
 /*
                 try {
@@ -98,8 +97,23 @@ class QYASPOL {
                     throw new ZbxException(0 < msgs.length ? msgs[0].getID() + " " + msgs[0].getText()
                                             : "Unknown error during qyaspol-yasp0200");
                 }//if (rc)
+
+                if (((ZabbixThread)Thread.currentThread()).isAs400CommError()) {
+                    Util.log(Util.LOG_WARNING,"  QYASPOL.aspCacheFiller.fill() communication to AS/400 is working again");
+                    ((ZabbixThread)Thread.currentThread()).setAs400CommError(false);
+                }//if
             } catch (PcmlException ex) {
-                Util.log(Util.LOG_WARNING,"  QYASPOL.aspCacheFiller.fill() error: %s", ex);
+                Exception ex1 = ex.getException();
+                if (null != ex1 && ex1 instanceof IOException) {
+                    if (!((ZabbixThread)Thread.currentThread()).isAs400CommError()) {
+                        Util.log(Util.LOG_WARNING,"  QYASPOL.aspCacheFiller.fill() communication to AS/400 error: %s", ex);
+                        ((ZabbixThread)Thread.currentThread()).setAs400CommError(true);
+                        if (system.isConnected())
+                            system.disconnectAllServices();
+                    }//if(it is the first communication error)
+                } else {
+                    Util.log(Util.LOG_WARNING,"  QYASPOL.aspCacheFiller.fill() error: %s", ex);
+                }//if(communication error)
                 throw new ZbxException(ex.getMessage());
             } finally{
                 //Trace.setTraceOn(false);
@@ -114,9 +128,8 @@ class QYASPOL {
         public void fill() throws ZbxException {
             Util.log(Util.LOG_DEBUG, " QYASPOL.dskCacheFiller.fill() started");
 
+            AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
             try {
-                AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
-
                 Util.log(Util.LOG_DEBUG, "  Constructing the ProgramCallDocument");
                 ProgramCallDocument pcml = new ProgramCallDocument(system, "as400.pcml.qyaspol");
                 Util.log(Util.LOG_DEBUG, "  Call...");
@@ -166,8 +179,24 @@ class QYASPOL {
                     throw new ZbxException(0 < msgs.length ? msgs[0].getID() + " " + msgs[0].getText()
                                             : "Unknown error during qyaspol-yasp0300");
                 }//if (rc)
+
+                if (((ZabbixThread)Thread.currentThread()).isAs400CommError()) {
+                    Util.log(Util.LOG_WARNING,"  QYASPOL.dskCacheFiller.fill() communication to AS/400 is working again");
+                    ((ZabbixThread)Thread.currentThread()).setAs400CommError(false);
+                }//if
+
             } catch (PcmlException ex) {
-                Util.log(Util.LOG_WARNING,"  QYASPOL.dskCacheFiller.fill() error: %s", ex);
+                Exception ex1 = ex.getException();
+                if (null != ex1 && ex1 instanceof IOException) {
+                    if (!((ZabbixThread)Thread.currentThread()).isAs400CommError()) {
+                        Util.log(Util.LOG_WARNING,"  QYASPOL.dskCacheFiller.fill() communication to AS/400 error: %s", ex);
+                        ((ZabbixThread)Thread.currentThread()).setAs400CommError(true);
+                        if (system.isConnected())
+                            system.disconnectAllServices();
+                    }//if(it is the first communication error)
+                } else {
+                    Util.log(Util.LOG_WARNING,"  QYASPOL.dskCacheFiller.fill() error: %s", ex);
+                }//if(communication error)
                 throw new ZbxException(ex.getMessage());
             } finally{
                 Util.log(Util.LOG_DEBUG, " QYASPOL.dskCacheFiller.fill() ended");

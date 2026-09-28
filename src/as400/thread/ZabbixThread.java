@@ -7,6 +7,7 @@ public abstract class ZabbixThread extends Thread {
     //class variables
     protected AS400  system = null;
     protected int    server_num;
+    protected boolean as400_comm_error = false;
     //static fields
     private static int server_count = -1;
 
@@ -21,5 +22,13 @@ public abstract class ZabbixThread extends Thread {
     public AS400 getAs400() {
         return this.system;
     }//getAs400()
+
+    public boolean isAs400CommError() {
+        return this.as400_comm_error;
+    }//isAs400CommError()
+
+    public void setAs400CommError(boolean value) {
+        this.as400_comm_error = value;
+    }//setAs400CommError
 
 }//class ZabbixThread

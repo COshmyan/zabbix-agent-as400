@@ -1,5 +1,6 @@
 package as400.metric;
 import as400.*;
+import java.io.IOException;
 
 abstract public class ZbxMetric {
 
@@ -16,6 +17,6 @@ abstract public class ZbxMetric {
         Util.log(Util.LOG_DEBUG,"ZbxMetric() constructor: metric '%s' successfully added",key_name);
     }//constructor ZbxMetric()
 
-    abstract public DataObject process(AgentRequest req) throws ZbxException;
+    abstract public DataObject process(AgentRequest req) throws ZbxException, IOException;
 
 }//class ZbxMetric

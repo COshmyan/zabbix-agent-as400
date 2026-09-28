@@ -105,6 +105,12 @@ public class PassiveCheck extends ZabbixThread {
             }//sync
         }//while(main loop)
 
+        try {
+            if (system.isConnected())
+                system.disconnectAllServices();
+        } catch (Exception ex) {
+            Util.log(Util.LOG_WARNING, " Error in PassiveCheck.process() during closing AS/400: %s",  ex);
+        }//try-catch
         Util.log(Util.LOG_INFO,"%s #%d stopped [%s #%d]", "agent", server_num, Thread.currentThread().getName(), this.process_num);
     }//run()
 
@@ -187,6 +193,7 @@ public class PassiveCheck extends ZabbixThread {
                     requestStr = requestStr.substring(0, i);
                     Util.log(Util.LOG_DEBUG,"PassiveCheck.process(): request is: '%s'", requestStr);
                     DataObject dobj = ZabbixAgent.process(new AgentRequest(requestStr));
+/*
                     com.ibm.as400.access.AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
                     try {
                         if (system.isConnected())
@@ -194,6 +201,7 @@ public class PassiveCheck extends ZabbixThread {
                     } catch (Exception ex) {
                         Util.log(Util.LOG_WARNING, " Error in PassiveCheck.process() during closing AS/400: %s",  ex);
                     }//try-catch
+*/
                     responseStr = dobj.getValue().toString();
                 } catch (ZbxException ex) {
                     responseStr = "ZBX_NOTSUPPORTED"+'\0'+ex.getMessage();

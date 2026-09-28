@@ -263,7 +263,19 @@ public class Procstat {
                 }//match to query
             }//for(global query_list)
 
-        } catch (PropertyVetoException|InterruptedException|IOException|AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException ex) {
+            if (((ZabbixThread)Thread.currentThread()).isAs400CommError()) {
+                Util.log(Util.LOG_WARNING," Procstat.updateJobinfoList() communication to AS/400 is working again");
+                ((ZabbixThread)Thread.currentThread()).setAs400CommError(false);
+            }//if
+
+        } catch (IOException ex) {
+            if (!((ZabbixThread)Thread.currentThread()).isAs400CommError()) {
+                Util.log(Util.LOG_WARNING," Procstat.updateJobinfoList() communication to AS/400 error: %s", ex);
+                ((ZabbixThread)Thread.currentThread()).setAs400CommError(true);
+                if (system.isConnected())
+                    system.disconnectAllServices();
+            }//if
+        } catch (PropertyVetoException|InterruptedException|AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException ex) {
             Util.log(Util.LOG_WARNING," Procstat.updateJobinfoList() error: %s", ex);
             //throw new ZbxException(ex.getMessage());
         } finally {

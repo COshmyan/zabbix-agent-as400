@@ -3,6 +3,7 @@ import as400.*;
 import as400.cache.ZbxCacheControllerThread;
 import as400.metric.*;
 import com.ibm.as400.access.*;
+import java.io.IOException;
 
 public class ZabbixAgent extends ZabbixThread {
 
@@ -20,8 +21,23 @@ public class ZabbixAgent extends ZabbixThread {
         ZbxMetric command = Config.commands.get(req.getKeyName());
         if (null == command)
             throw new ZbxException("Unsupported item key name: " + req.getKeyName());
-        Util.log(Util.LOG_DEBUG, "end of ZabbixAgent.process()");
-        return command.process(req);
+        try {
+            return command.process(req);
+        } catch (IOException ex) {
+            //try to reconnect to AS/400
+            try {
+                Util.log(Util.LOG_DEBUG, " in ZabbixAgent.process(): communication error, trying to reconnect...");
+                AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+                if (system.isConnected())
+                    system.disconnectAllServices();
+                return command.process(req);
+            } catch (IOException exi) {
+                Util.log(Util.LOG_WARNING," ZabbixAgent.process() '%s' error: %s", req.getUnparsedKey(), ex);
+                throw new ZbxException(ex.toString());
+            }//try-catch
+        } finally {
+            Util.log(Util.LOG_DEBUG, "end of ZabbixAgent.process()");
+        }//try-catch-finally
     }//process()
 
     public static void main(String[] args) throws Exception {
@@ -36,6 +52,7 @@ public class ZabbixAgent extends ZabbixThread {
         ZabbixThread cc = new ZbxCacheControllerThread();
         cc.start();
         ZabbixThread collector = new CollectorThread();
+        collector.system = t.getAs400();    //reuse AS/400 connections from the completed configuration thread
         collector.start();
 
         try {
@@ -78,6 +95,7 @@ public class ZabbixAgent extends ZabbixThread {
                             System.getProperty("java.vm.name",    "unknown"),
                             System.getProperty("java.vm.version", "unknown"),
                             System.getProperty("java.vm.info",    "unknown"));
+        Util.log(Util.LOG_WARNING, " %s", Copyright.version);
         GenericMetrics.init();
         As400Metrics.init();
 

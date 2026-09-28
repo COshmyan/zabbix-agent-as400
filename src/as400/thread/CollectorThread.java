@@ -33,9 +33,11 @@ public class CollectorThread extends ZabbixThread {
                 Util.log(Util.LOG_CRITICAL, ex, "Exception in Procstat.updateJobinfoList():");
                 Config.running = false;
                 continue;
+/*
             } finally {
                 if (system.isConnected())
                     system.disconnectAllServices();
+*/
             }//try-catch
             Procstat.cleanJobinfoList(cur_ts - 3600 * 1000); //1 hour ago
             Procstat.cleanQueryList  (cur_ts - 3600 * 1000 * 24); //1 day ago
@@ -56,6 +58,8 @@ public class CollectorThread extends ZabbixThread {
 
         }//while(main loop)
 
+        if (system.isConnected())
+            system.disconnectAllServices();
         Util.log(Util.LOG_INFO,"agent #%d stopped [%s]", server_num, Thread.currentThread().getName());
     }//run()
 

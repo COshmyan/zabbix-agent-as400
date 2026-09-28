@@ -10,6 +10,7 @@ import org.json.simple.parser.ParseException;
 
 public class ActiveCheck extends ZabbixThread {
 
+    //public constants
     public static final byte ZBX_METRIC_FLAG_PERSISTENT     =0x01;  //do not overwrite old values when adding to the buffer
 //    public static final byte ZBX_METRIC_FLAG_NEW            =0x02;  //new metric, just added
     public static final byte ZBX_METRIC_FLAG_LOG_LOG        =0x04;  //log[
@@ -17,6 +18,11 @@ public class ActiveCheck extends ZabbixThread {
     public static final byte ZBX_METRIC_FLAG_LOG_EVENTLOG   =0x10;  //eventlog[
     public static final byte ZBX_METRIC_FLAG_LOG            =       //item for log file monitoring, one of the above
         (ZBX_METRIC_FLAG_LOG_LOG | ZBX_METRIC_FLAG_LOG_LOGRT | ZBX_METRIC_FLAG_LOG_EVENTLOG);
+
+    //private constants
+    //0x0000000100000000, it is more than max 4-bytes integer.
+    //Util.long2key() processes only lower 4 bytes, so result will be equivalent 0l, i.e. MessageQueue.OLDEST
+    private static final long NON_EXISTING_MESSAGE          = 4294967296l;
 
     static class ActiveCheckMetric {
         //object variables
@@ -300,11 +306,11 @@ public class ActiveCheck extends ZabbixThread {
                     Util.log(Util.LOG_WARNING, "Could not obtain value for parameter 'HostMetadataItem=%s': %s",
                             host_metadata_item, ex);
                 }//try-catch
-                if (Config.HOST_METADATA_LEN < host_metadata.length()) {
+                if (null != host_metadata && Config.HOST_METADATA_LEN < host_metadata.length()) {
                     Util.log(Util.LOG_WARNING, "The returned value '%s' of \"%s\" item specified by "
                         + "\"HostMetadataItem\" configuration parameter is too long, using first %d characters",
                         host_metadata, host_metadata_item, Config.HOST_METADATA_LEN);
-                    host_metadata = host_metadata.substring(0, Config.HOST_METADATA_LEN + 1);
+                    host_metadata = host_metadata.substring(0, Config.HOST_METADATA_LEN);
                 }//if (HOST_METADATA_LEN)
             }//if(host_metadata_item)
         }//if(host_metadata)
@@ -575,6 +581,8 @@ public class ActiveCheck extends ZabbixThread {
                     if ("CPF2410".equals(ex.getAS400Message().getID())) {
                         Util.log(Util.LOG_WARNING," Key %d (%08x) not found for the message queue %s, starting from the oldest one",
                                 metric.lastlogsize, metric.lastlogsize, mqueueName);
+                        Util.log(Util.LOG_WARNING,"   MessageQueue.OLDEST = %d, MessageQueue.NEWEST = %d", Util.key2long(MessageQueue.OLDEST), Util.key2long(MessageQueue.NEWEST));
+                        metric.lastlogsize = NON_EXISTING_MESSAGE;
                         mqueue.setUserStartingMessageKey(MessageQueue.OLDEST);
                         mlist = mqueue.getMessages();
                     } else {
@@ -686,6 +694,9 @@ public class ActiveCheck extends ZabbixThread {
                 else
                     processCommonCheck(metric);
 
+                //we are here, so the last call of process*Check(metric) was successful
+                //therefore reset the error_count
+                metric.error_count = 0;
                 if (0 == metric.error_count) {
                     boolean old_state_unsupported = metric.state_unsupported;
                     if (metric.state_unsupported) {
@@ -708,17 +719,19 @@ public class ActiveCheck extends ZabbixThread {
                     //metric.flags &= ~ZBX_METRIC_FLAG_NEW;
                 }//if(error_count==0)
             } catch (ZbxException ex) {
-                metric.state_unsupported   = true;
-                metric.refresh_unsupported = false;
-                metric.error_count = 0;
-                Util.log(Util.LOG_WARNING,"active check \"%s\" is not supported: %s", metric.key,
-                            ex.getMessage());
-                DataObject dobj = new DataObject(metric.key_orig, ex.getMessage());
-                dobj.setStateNotsupported(true);
-                dobj.setMtime(metric.mtime_ms / 1000);  //in seconds
-                dobj.setLastlogsize(metric.lastlogsize);
-                dobj.setFlags(metric.flags);
-                processValue(Config.getHostname(), dobj);
+                if (0 < metric.error_count++) {
+                    metric.state_unsupported   = true;
+                    metric.refresh_unsupported = false;
+                    metric.error_count = 0;
+                    Util.log(Util.LOG_WARNING,"active check \"%s\" is not supported: %s", metric.key,
+                                ex.getMessage());
+                    DataObject dobj = new DataObject(metric.key_orig, ex.getMessage());
+                    dobj.setStateNotsupported(true);
+                    dobj.setMtime(metric.mtime_ms / 1000);  //in seconds
+                    dobj.setLastlogsize(metric.lastlogsize);
+                    dobj.setFlags(metric.flags);
+                    processValue(Config.getHostname(), dobj);
+                }//if(it is not the first error)
             }//try-catch
 
             metric.nextcheck_ms = System.currentTimeMillis() + metric.refresh_ms;
@@ -758,8 +771,10 @@ public class ActiveCheck extends ZabbixThread {
                 if (nextcheck <= 0l)
                     nextcheck = System.currentTimeMillis() + 60000l;
             } else {
+/*
                 if (system.isConnected())
                     system.disconnectAllServices();
+*/
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException ex) {
@@ -769,6 +784,8 @@ public class ActiveCheck extends ZabbixThread {
 
         }//while(main loop)
 
+        if (system.isConnected())
+            system.disconnectAllServices();
         Util.log(Util.LOG_INFO,"agent #%d (%s) stopped [%s #%d]", server_num, orig_serverActive,
                 Thread.currentThread().getName(), server_num + 1);
     }//run()
