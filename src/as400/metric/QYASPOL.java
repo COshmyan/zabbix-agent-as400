@@ -51,6 +51,8 @@ class QYASPOL {
             Util.log(Util.LOG_DEBUG, " QYASPOL.aspCacheFiller.fill() started");
 
             AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+            ProgramCallDocument pcml = null;
+            byte [] reqHandle = null;
             try {
                 Util.log(Util.LOG_DEBUG, "  Constructing the ProgramCallDocument");
 /*
@@ -62,10 +64,11 @@ class QYASPOL {
                 Trace.setTraceOn(true);
                 Trace.setTracePCMLOn(true);
 */
-                ProgramCallDocument pcml = new ProgramCallDocument(system, "as400.pcml.qyaspol");
+                pcml = new ProgramCallDocument(system, "as400.pcml.qyaspol");
                 Util.log(Util.LOG_DEBUG, "  Call...");
                 boolean rc = pcml.callProgram("qyaspol-yasp0200");
                 if (rc) {
+                    reqHandle = (byte[])pcml.getValue("qyaspol-yasp0200.listInfo.reqHandle");
                     int rcdsReturned = pcml.getIntValue("qyaspol-yasp0200.listInfo.rcdsReturned");
                     Util.log(Util.LOG_DEBUG, "  OK. Records: %d", rcdsReturned);
                     String value = (String)pcml.getValue("qyaspol-yasp0200.listInfo.infoComplete");
@@ -115,8 +118,17 @@ class QYASPOL {
                     Util.log(Util.LOG_WARNING,"  QYASPOL.aspCacheFiller.fill() error: %s", ex);
                 }//if(communication error)
                 throw new ZbxException(ex.getMessage());
-            } finally{
-                //Trace.setTraceOn(false);
+            } finally {
+                if (null != reqHandle) {
+                    try {
+                        pcml.setValue("qyaspol-qgyclst.reqHandle", reqHandle);
+                        boolean ret = pcml.callProgram("qyaspol-qgyclst");
+                        Util.log(Util.LOG_DEBUG,"   QYASPOL.aspCacheFiller.fill() closing list: %s", (ret ? "success" : "fail"));
+                    } catch (PcmlException ex1) {
+                        Util.log(Util.LOG_WARNING,"   QYASPOL.aspCacheFiller.fill() error during closing list: %s", ex1);
+                    }//try-catch
+                }//if (reqHandle)
+//                Trace.setTraceOn(false);
                 Util.log(Util.LOG_DEBUG, " QYASPOL.aspCacheFiller.fill() ended");
             }//try-catch-finally
 
@@ -129,12 +141,24 @@ class QYASPOL {
             Util.log(Util.LOG_DEBUG, " QYASPOL.dskCacheFiller.fill() started");
 
             AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+            ProgramCallDocument pcml = null;
+            byte [] reqHandle = null;
             try {
                 Util.log(Util.LOG_DEBUG, "  Constructing the ProgramCallDocument");
-                ProgramCallDocument pcml = new ProgramCallDocument(system, "as400.pcml.qyaspol");
+/*
+                try {
+                    Trace.setFileName("C:\\workfiles\\as400\\debug_pcml_qyaspol.txt");
+                } catch (IOException ex) {
+                    Util.log(Util.LOG_ERROR, " Error " + ex);
+                }//try-catch
+                Trace.setTraceOn(true);
+                Trace.setTracePCMLOn(true);
+*/
+                pcml = new ProgramCallDocument(system, "as400.pcml.qyaspol");
                 Util.log(Util.LOG_DEBUG, "  Call...");
                 boolean rc = pcml.callProgram("qyaspol-yasp0300");
                 if (rc) {
+                    reqHandle = (byte[])pcml.getValue("qyaspol-yasp0300.listInfo.reqHandle");
                     int rcdsReturned = pcml.getIntValue("qyaspol-yasp0300.listInfo.rcdsReturned");
                     Util.log(Util.LOG_DEBUG, "  OK. Records: %d", rcdsReturned);
                     String value = (String)pcml.getValue("qyaspol-yasp0300.listInfo.infoComplete");
@@ -199,6 +223,16 @@ class QYASPOL {
                 }//if(communication error)
                 throw new ZbxException(ex.getMessage());
             } finally{
+                if (null != reqHandle) {
+                    try {
+                        pcml.setValue("qyaspol-qgyclst.reqHandle", reqHandle);
+                        boolean ret = pcml.callProgram("qyaspol-qgyclst");
+                        Util.log(Util.LOG_DEBUG,"   QYASPOL.dskCacheFiller.fill() closing list: %s", (ret ? "success" : "fail"));
+                    } catch (PcmlException ex1) {
+                        Util.log(Util.LOG_WARNING,"   QYASPOL.dskCacheFiller.fill() error during closing list: %s", ex1);
+                    }//try-catch
+                }//if (reqHandle)
+//                Trace.setTraceOn(false);
                 Util.log(Util.LOG_DEBUG, " QYASPOL.dskCacheFiller.fill() ended");
             }//try-catch-finally
 

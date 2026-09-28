@@ -96,7 +96,7 @@
   <struct name="listInfo" outputsize="80">
     <data name="totalRcds"    type="int"  length="4" />
     <data name="rcdsReturned" type="int"  length="4" />
-    <data name="rqsHandle"    type="byte" length="4" />
+    <data name="reqHandle"    type="byte" length="4" />
     <data name="rcdLength"    type="int"  length="4" />
     <data name="infoComplete" type="char" length="1" />
     <data name="dateCreated"  type="char" length="7" />
@@ -142,6 +142,11 @@
     <data name="nbrfilter"      type="int"    length="4"        usage="input" init="1" />
     <data name="filter"         type="struct" struct="filter"   usage="input" />
     <data name="format"         type="char"   length="8"        usage="input" init="YASP0300" />
+    <data name="errorCode"      type="int"    length="4"        usage="input" init="0"/>
+  </program>
+
+  <program name="qyaspol-qgyclst" path="/QSYS.LIB/qgyclst.pgm">
+    <data name="reqHandle"      type="byte"   length="4"        usage="input" />
     <data name="errorCode"      type="int"    length="4"        usage="input" init="0"/>
   </program>
 

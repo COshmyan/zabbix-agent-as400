@@ -581,7 +581,7 @@ public class ActiveCheck extends ZabbixThread {
                     if ("CPF2410".equals(ex.getAS400Message().getID())) {
                         Util.log(Util.LOG_WARNING," Key %d (%08x) not found for the message queue %s, starting from the oldest one",
                                 metric.lastlogsize, metric.lastlogsize, mqueueName);
-                        Util.log(Util.LOG_WARNING,"   MessageQueue.OLDEST = %d, MessageQueue.NEWEST = %d", Util.key2long(MessageQueue.OLDEST), Util.key2long(MessageQueue.NEWEST));
+                        //Util.log(Util.LOG_WARNING,"   MessageQueue.OLDEST = %d, MessageQueue.NEWEST = %d", Util.key2long(MessageQueue.OLDEST), Util.key2long(MessageQueue.NEWEST));
                         metric.lastlogsize = NON_EXISTING_MESSAGE;
                         mqueue.setUserStartingMessageKey(MessageQueue.OLDEST);
                         mlist = mqueue.getMessages();
