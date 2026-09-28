@@ -111,6 +111,8 @@ public class Procstat {
             } else {
                 h_data.get(0).cpu_time_used_per_tick += cpu_time_used;
             }//if
+            if (0l > cpu_time_used)
+                Util.log(Util.LOG_ERROR,"ERROR: Procstat.Query.add_time(): negative value of cpu_time_used (%d)!!", cpu_time_used);
         }//add_time()
 
         synchronized Float getPercentage(int minutes) throws ZbxException {
@@ -123,10 +125,10 @@ public class Procstat {
             if (size <= max_index)
                 max_index = size - 1;
             time_delta = h_data.get(0).timestamp - h_data.get(max_index).timestamp;
-            if (0l == time_delta) {
+            if (0l >= time_delta) {
                 //should be impossible!!
-                Util.log(Util.LOG_WARNING,"  Query.getPercentage(): jobnum=%s, usrname=%s, jobname=%s, subsystem=%s, time_delta is zero, max_index=%d",
-                        this.jobnum, this.usrname, this.jobname, this.subsystem, max_index);
+                Util.log(Util.LOG_ERROR,"  ERROR: Query.getPercentage(): time_delta=%s, jobnum=%s, usrname=%s, jobname=%s, subsystem=%s, time_delta is zero, max_index=%d",
+                        time_delta, this.jobnum, this.usrname, this.jobname, this.subsystem, max_index);
                 throw new ZbxException("There is no such job anymore");
             }
             for (int i = 0; i < max_index; i++) {
@@ -137,7 +139,10 @@ public class Procstat {
             Util.log(Util.LOG_DEBUG,"  Query.getPercentage(): max_index=%d, time_delta=%d, time_sum=%d",
                                     max_index, time_delta, time_sum);
             //percentage with 0.01% accuracy, "+0.005%" for round-up instead of fractional part truncation
-            return new Float( ( ( ( (time_sum * 100000) / time_delta ) + 5 ) / 10 ) * 0.01);
+            double res = ( ( ( (time_sum * 100000) / time_delta ) + 5 ) / 10 ) * 0.01;
+            if (0.0 > res)
+                Util.log(Util.LOG_ERROR,"ERROR: Procstat.Query.getPercentage(): negative value of res (%f)!! time_sum=%d, time_delta=%d", res, time_sum, time_delta);
+            return new Float(res);
         }//getPercentage()
 
     }//inner class Query
@@ -211,7 +216,14 @@ public class Procstat {
                 String usrname = job.getUser();
                 String job_fullname = jobnum + '/' + usrname + '/' + jobname;
                 String subsystem = job.getSubsystem();
-                long cpu_used = ((Long)job.getValue(Job.CPU_TIME_USED_LARGE)).longValue();
+                Object res = job.getValue(Job.CPU_TIME_USED_LARGE);
+                if (null == res)
+                    continue;   //according to manual, API "may return null in the rare case"
+                long cpu_used = ((Long)res).longValue();
+                if (0l > cpu_used) {
+                    Util.log(Util.LOG_ERROR," ERROR: Procstat.updateJobinfoList(): negative value of cpu_used %d for job %s in subsystem %s",
+                        cpu_used, job_fullname, subsystem);
+                }
                 Jobinfo ji = jobinfo_list.get(job_fullname);
                 if (null == ji) {
                     //new job, there was no such job in previous iteration
@@ -243,6 +255,12 @@ public class Procstat {
     	            //Util.log(Util.LOG_DEBUG," Procstat.updateJobinfoList(): old job %s, cpu_used=%d",
                     //          job_fullname, cpu_used);
                     long cpu_used_per_tick = cpu_used - ji.cpu_used;
+                    if (0l > cpu_used_per_tick) {
+                        Util.log(Util.LOG_WARNING," WARNING: Procstat.updateJobinfoList(): negative value of cpu_used_per_tick %d for job %s in subsystem %s",
+                            cpu_used_per_tick, job_fullname, subsystem);
+                        Util.log(Util.LOG_WARNING,"  current cpu_used=%d, ji.cpu_used=%d", cpu_used, ji.cpu_used);
+                        cpu_used_per_tick = 0l;
+                    }
                     synchronized (ji) {
                         if (null != ji.query_list) {
                             for (Query query: ji.query_list) {
@@ -260,7 +278,7 @@ public class Procstat {
                 Query query = e.nextElement();
                 if (query.last_updated < current_ts) {
                     query.add_time(0l, current_ts);
-                }//match to query
+                }//if(query.last_updated<current_ts)
             }//for(global query_list)
 
             if (((ZabbixThread)Thread.currentThread()).isAs400CommError()) {

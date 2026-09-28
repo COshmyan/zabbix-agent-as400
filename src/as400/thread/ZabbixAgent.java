@@ -68,9 +68,11 @@ public class ZabbixAgent extends ZabbixThread {
             try { collector.join(500); } catch (InterruptedException ex) { ; }
             cc.interrupt();
             try { cc.join(500); } catch (InterruptedException ex) { ; }
-        } catch (Exception ex) {
-	        Util.log(Util.LOG_DEBUG, "Exception: %s", ex);
+        } catch (Throwable ex) {
+	        Util.log(Util.LOG_CRITICAL, "ERROR: %s\n\tStack Trace:", ex);
+                ex.printStackTrace(Util.getPrintWriter());
         } finally {
+            Config.running = false;
             Util.log(Util.LOG_WARNING, "Zabbix Agent stopped. v%s", GenericMetrics.VERSION);
         }
     }//main()

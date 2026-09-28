@@ -91,6 +91,10 @@ public class Util {
         }//if (successfully rotated)
     }//rotateLog()
 
+    public static PrintWriter getPrintWriter() {
+        return out;
+    }//getPrintWriter()
+
     public synchronized static Charset getUtf8() {
         if (null == utf8)
             try {
