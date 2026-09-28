@@ -15,7 +15,7 @@ Zabbix agent emulator version: 0.8.0 and higher.
 
 ## Setup
 
-Install Zabbix agent emulator following its [documentation](https://???link???).
+Install Zabbix agent emulator following its [documentation](../../..).
 
 ---
 
