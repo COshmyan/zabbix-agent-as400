@@ -6,7 +6,7 @@ import com.ibm.as400.access.*;
 import java.io.IOException;
 import java.beans.PropertyVetoException;
 
-public class ZabbixAgent extends ZabbixThread {
+public class ZabbixAgent extends ZabbixThread implements As400Thread {
 
     //static class variables
     private static String configFile = "zabbix_agentd.conf";
@@ -16,13 +16,28 @@ public class ZabbixAgent extends ZabbixThread {
         setName("ZabbixAgent config");
     }//constructor ZabbixAgent()
 
-    public static DataObject process(AgentRequest req) throws ZbxException {
+    public static DataObject zbxExecuteAgentCheck(AgentRequest req, int flags, long timeout_ms) throws ZbxException {
         DataObject ret;
         Util.log(Util.LOG_DEBUG, "in ZabbixAgent.process(): key_name='%s', full key='%s'",
                 req.getKeyName(), req.getUnparsedKey());
+        //resolve aliases, replacing original AgentRequest by the new one
+        if (0 != (flags & Util.ZBX_PROCESS_WITH_ALIAS) )
+            req = Config.zbxAliasGet(req);
+
+        if (0 == (flags & Util.ZBX_PROCESS_LOCAL_COMMAND) && !Config.zbxCheckRequestAccessRules(req))
+            throw new ZbxException ("Unsupported item key."); //forbidden
+
         ZbxMetric command = Config.getZbxMetric(req.getKeyName());
+        if (0 == (command.getFlags() & Util.CF_HAVEPARAMS) && !req.nullArguments())
+            throw new ZbxException("Item does not allow parameters.");
+
+        if (0l == timeout_ms)
+            timeout_ms = Config.getTimeout_ms();
+        req.setTimeout(timeout_ms);
+
         try {
-            ret = command.process(req);
+//            ret = command.process(req);
+            ret = RequestThread.getResult(command, req);
         } catch (Throwable ex) {
             Throwable cause = ex;
             while (null != cause && !(cause instanceof IOException)) {
@@ -35,19 +50,20 @@ public class ZabbixAgent extends ZabbixThread {
                     throw ((ZbxException)ex);
                 } else {
                     throw new RuntimeException(ex);
-                }//trow this exception (ZbxException or RuntimeException) to next level
+                }//throw this exception (ZbxException or RuntimeException) to next level
             } else {
 
                 //try to reconnect to AS/400
-                if (!((ZabbixThread)Thread.currentThread()).isAs400CommError()) {
+                if (!((As400Thread)Thread.currentThread()).isAs400CommError()) {
                     Util.log(Util.LOG_WARNING, " ZabbixAgent.process(): '%s' communication error: %s, trying to reconnect...",
                             req.getUnparsedKey(), ex);
                 }//if(it is the first communication error)
-                AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+                AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
                 if (system.isConnected())
                     system.disconnectAllServices();
                 try {
-                    ret = command.process(req);
+//                    ret = command.process(req);
+                    ret = RequestThread.getResult(command, req);
                 } catch (Throwable ex1) {
                     for (cause = ex1; null != cause && !(cause instanceof IOException); cause = cause.getCause())
                         ;
@@ -58,16 +74,16 @@ public class ZabbixAgent extends ZabbixThread {
                             throw ((ZbxException)ex1);
                         } else {
                             throw new RuntimeException(ex1);
-                        }//trow this exception (ZbxException or RuntimeException) to next level
+                        }//throw this exception (ZbxException or RuntimeException) to next level
                     } else {
-                        if (!((ZabbixThread)Thread.currentThread()).isAs400CommError()) {
+                        if (!((As400Thread)Thread.currentThread()).isAs400CommError()) {
                             Util.log(Util.LOG_WARNING,"  ZabbixAgent.process() '%s' communication error: %s", req.getUnparsedKey(), ex1);
                         }//if(it is the first communication error)
                         throw new ZbxException(ex1.toString());
                         //throw ((IOException)cause);
                     }//if(cause is IOException)
                 } finally {
-                    ((ZabbixThread)Thread.currentThread()).setAs400CommError(true);
+                    ((As400Thread)Thread.currentThread()).setAs400CommError(true);
                 }//try-catch
             }//if-else(!IOException)
 
@@ -75,12 +91,12 @@ public class ZabbixAgent extends ZabbixThread {
             Util.log(Util.LOG_DEBUG, "end of ZabbixAgent.process()");
         }//try-catch-finally
 
-        if (((ZabbixThread)Thread.currentThread()).isAs400CommError() && (command.getFlags() & Util.CF_AS400COMM) != 0) {
+        if (((As400Thread)Thread.currentThread()).isAs400CommError() && (command.getFlags() & Util.CF_AS400COMM) != 0) {
             Util.log(Util.LOG_WARNING," ZabbixAgent.process() '%s' communication to AS/400 is working again", req.getUnparsedKey());
-            ((ZabbixThread)Thread.currentThread()).setAs400CommError(false);
+            ((As400Thread)Thread.currentThread()).setAs400CommError(false);
         }//if
         return ret;
-    }//process()
+    }//zbxExecuteAgentCheck()
 
     public static void main(String[] args) throws Exception {
         //process parameters
@@ -153,7 +169,7 @@ public class ZabbixAgent extends ZabbixThread {
                             System.getProperty("java.vm.info",    "unknown"));
 
         try {
-            Class c = Class.forName("com.ibm.as400.access.Copyright");
+            Class<?> c = Class.forName("com.ibm.as400.access.Copyright");
             try {
                 java.lang.reflect.Field field = c.getField("version"); 
                 Util.log(Util.LOG_WARNING, " %s", field.get(null).toString());
@@ -180,7 +196,6 @@ public class ZabbixAgent extends ZabbixThread {
         } catch (PropertyVetoException ex) {
             Util.log(Util.LOG_WARNING, ex, "Could not set some property for AS400 object, ignored");
         }//try-catch
-        //((ZabbixThread)Thread.currentThread()).system = new com.ibm.as400.access.AS400(Config.getAs400ServerHost());
 
         if (!Config.setDefaultsAndValidate(configFile)) {
             Util.log(Util.LOG_CRITICAL,"Could not validate config file '%s', exiting\n", configFile);
@@ -189,7 +204,8 @@ public class ZabbixAgent extends ZabbixThread {
 
         try {
             Util.log(Util.LOG_WARNING, " Agent hostname: '%s', System info: %s", Config.getHostname(),
-                    ZabbixAgent.process(new AgentRequest("system.uname")).getValue().toString());
+                    ZabbixAgent.zbxExecuteAgentCheck(new AgentRequest("system.uname"),
+                        Util.ZBX_PROCESS_LOCAL_COMMAND, 0).getValue().toString());
         } catch (ZbxException ex) {
             Util.log(Util.LOG_CRITICAL, "Error obtaining 'system.uname' metric, exiting\n");
             Util.flushLogAndExit();

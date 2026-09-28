@@ -5,28 +5,14 @@ import java.util.regex.*;
 public class AgentRequest {
 
     //static class variables
-    static Pattern      key_pattern         = Pattern.compile("[-0-9a-zA-Z_\\.]+(\\[.*\\])?");
-//    Pattern         key_name_pattern    = Pattern.compile("[^-0-9a-zA-Z_\\.]");
+    static final Pattern key_pattern = Pattern.compile("([-0-9a-zA-Z_\\.]+)(?:\\[(.*)\\])?");
 
     //class fields
     String              unparsed_key;
     String              key_name;
     ArrayList<String>   params;
-    long                lastlogsize;
-    long                mtime_ms;
-/*
-    public AgentRequest(String key_name, long lastlogsize, long mtime_ms) {
-        this.key_name   = key_name;
-        this.lastlogsize= lastlogsize;
-        this.mtime_ms   = mtime_ms;
-        this.params     = new ArrayList<String>();
-    }//constuctor AgentRequest()
+    long                timeout_ms;
 
-    public AgentRequest(String key_name, long lastlogsize, long mtime_ms, String str) {
-        this(key_name, lastlogsize, mtime_ms);
-        parseString(str);
-    }//constuctor AgentRequest()
-*/
     /*
      * Parse the string onto key_name and its parameters
      * Format of the key descrbed here: https://www.zabbix.com/documentation/3.0/manual/config/items/item/key
@@ -34,21 +20,22 @@ public class AgentRequest {
      * @param str - input string
      */
     public AgentRequest(String str) throws ZbxException {
-        int pos;
-        if (!key_pattern.matcher(str).matches())
-            throw new ZbxException("Key '"+str+"' has invalid format");
+        Matcher m = key_pattern.matcher(str);
+        if (!m.matches())
+            throw new ZbxException("Key '" + str + "' has invalid format");
         this.unparsed_key = str;
-        //key_name = key_name_pattern.split(str, 0)[0];
-        pos = str.indexOf('[');
-        if (pos<0) {
-            this.key_name = str;
+        this.key_name = m.group(1);
+        String p = m.group(2);
+//        if (null != p && !"".equals(p)) {
+        if (null != p) {
+            this.params = new ArrayList<String>();
+            parseParameters(p);
         } else {
-            this.key_name = str.substring(0,pos);
-            this.params   = new ArrayList<String>();
-            parseParameters(str.substring(pos+1,str.length()-1));
-        }
-        if (Util.LOG_DEBUG <= Config.getDebugLevel()) {
-            Util.log(Util.LOG_DEBUG, "constuctor AgentRequest(): str='%s', key_name='%s'", str, key_name);
+            this.params = null;
+        }//if(params)
+
+        if (Util.LOG_TRACE1 <= Config.getDebugLevel()) {
+            Util.log(Util.LOG_TRACE1, "constuctor AgentRequest(): str='%s', key_name='%s'", str, key_name);
             StringBuilder s = new StringBuilder(" parameters list: ");
             if (null == params) {
                 s.append("null");
@@ -63,8 +50,12 @@ public class AgentRequest {
                 }//for
                 s.append(']');
             }//if(exists)
-            Util.log(Util.LOG_DEBUG, s.toString());
+            Util.log(Util.LOG_TRACE1, s.toString());
         }//if(debug)
+    }//constuctor AgentRequest()
+
+    //can be used and extended in sub-classes
+    protected AgentRequest() throws ZbxException {
     }//constuctor AgentRequest()
 
     /*
@@ -72,7 +63,7 @@ public class AgentRequest {
      * @param str - input string with parameters only
      *
      */
-    private void parseParameters(String str) throws ZbxException {
+    protected void parseParameters(String str) throws ZbxException {
         int p1 = 0, p2, len = str.length();
 
         while (p1 < len) {
@@ -89,7 +80,7 @@ public class AgentRequest {
                         p1 = p2++;
                     } else {
                         res.append(str.substring(p1, p2++));
-                        params.add(res.toString());
+                        this.params.add(res.toString());
                         break;
                     }//if
                 }//while inside the quoted parameter
@@ -99,13 +90,13 @@ public class AgentRequest {
                 //non-quoted usual parameter: only comma is forbidden (used as separator)
                 p2 = str.indexOf(',', p1);
                 if (p2 < 0) {
-                    params.add(str.substring(p1));
+                    this.params.add(str.substring(p1));
                     break;
                 } else {
-                    params.add(str.substring(p1, p2));
+                    this.params.add(str.substring(p1, p2));
                 }//if(comma (not) found)
             }//if(starts with quote)
-            //parameter was processed, so p1 must point to comma or to end of string
+            //parameter was processed, so p2 must point to comma or to end of string
             if (p2 < len && ',' != str.charAt(p2))
                 throw new ZbxException ("parameter string '"+str+"' has invalid format (something instead of comma)");
             p1 = p2 + 1;
@@ -121,15 +112,34 @@ public class AgentRequest {
     }//getKeyName()
 
     public int getNparam() {
-        if (params == null)
+        if (null == this.params)
             return 0;
-        return params.size();
+        return this.params.size();
     }//getNparam()
 
+    public long getTimeout() {
+        return this.timeout_ms;
+    }//getTimeout()
+
+    public void setTimeout(long timeout_ms) {
+        this.timeout_ms = timeout_ms;
+    }//setTimeout
+
+    //either 'key[]' or 'key[""]', but not 'key'
+    public boolean emptyArguments() {
+        return (null != this.params && 
+            (0 == this.params.size() || 1 == this.params.size() && 0 == this.params.get(0).length())
+            );
+    }//emptyArguments()
+
+    public boolean nullArguments() {
+        return (null == this.params);
+    }//emptyArguments()
+
     public String getParam(int i) {
-        if (params == null)
+        if (getNparam() <= i)
             return null;
-        return params.get(i);
+        return this.params.get(i);
     }//getParam()
 
 }//class AgentRequest

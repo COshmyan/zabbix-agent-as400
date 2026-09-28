@@ -1,6 +1,6 @@
 package as400.perfstat;
 import as400.*;
-import as400.thread.ZabbixThread;
+import as400.thread.As400Thread;
 import com.ibm.as400.access.*;
 import java.io.*;
 import java.util.*;
@@ -115,12 +115,16 @@ public class Procstat {
                 Util.log(Util.LOG_ERROR,"ERROR: Procstat.Query.add_time(): negative value of cpu_time_used (%d)!!", cpu_time_used);
         }//add_time()
 
-        synchronized Float getPercentage(int minutes) throws ZbxException {
+        synchronized Float getPercentage(int minutes, boolean allow_empty) throws ZbxException {
             this.last_accessed = System.currentTimeMillis();
             long time_delta, time_sum = 0l;
             int size = this.h_data.size();
-            if (size < 2)
-                throw new ZbxException("Datas still not collected yet");
+            if (size < 2) {
+                if (allow_empty)
+                    return new Float(0.0);
+                else
+                    throw new ZbxException("Datas still not collected yet");
+            }//if(size<2)
             int max_index = minutes * TIMES_PER_MIN;
             if (size <= max_index)
                 max_index = size - 1;
@@ -196,7 +200,7 @@ public class Procstat {
 //        if (0 == query_list.size())
 //            return;
         Util.log(Util.LOG_TRACE1,"Procstat.updateJobinfoList() started");
-        AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+        AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
         JobList jl = new JobList(system);
         try {
             jl.clearJobSelectionCriteria();
@@ -209,13 +213,13 @@ public class Procstat {
             //It is not guaranted that implicit call of load() method from jl.getJobs() throws an exception upon communication errors,
             //therefore we performs this call explicitly
             jl.load();
-            Enumeration jobs = jl.getJobs();
+            @SuppressWarnings("unchecked") Enumeration<Job> jobs = (Enumeration<Job>)jl.getJobs();
             long current_ts = System.currentTimeMillis();
 
             while (jobs.hasMoreElements()) {
                 if (!Config.running)
                     break;
-                Job job = (Job)jobs.nextElement();
+                Job job = jobs.nextElement();
                 String jobname = null, jobnum = null, usrname = null, job_fullname = null, subsystem = null;
                 Object res;
                 //in rare cases some job is disappeared during the job list processing, just ignore such job
@@ -295,15 +299,15 @@ public class Procstat {
                 }//if(query.last_updated<current_ts)
             }//for(global query_list)
 
-            if (((ZabbixThread)Thread.currentThread()).isAs400CommError()) {
+            if (((As400Thread)Thread.currentThread()).isAs400CommError()) {
                 Util.log(Util.LOG_WARNING," Procstat.updateJobinfoList() communication to AS/400 is working again");
-                ((ZabbixThread)Thread.currentThread()).setAs400CommError(false);
+                ((As400Thread)Thread.currentThread()).setAs400CommError(false);
             }//if
 
         } catch (IOException ex) {
-            if (!((ZabbixThread)Thread.currentThread()).isAs400CommError()) {
+            if (!((As400Thread)Thread.currentThread()).isAs400CommError()) {
                 Util.log(Util.LOG_WARNING," Procstat.updateJobinfoList() communication to AS/400 error: %s", ex);
-                ((ZabbixThread)Thread.currentThread()).setAs400CommError(true);
+                ((As400Thread)Thread.currentThread()).setAs400CommError(true);
             }//if
             if (system.isConnected())
                 system.disconnectAllServices();
@@ -359,7 +363,7 @@ public class Procstat {
     public static String jobDiscovery(int seconds) {
         long ms = seconds * 1000;
         StringBuilder buf = new StringBuilder();
-        buf.append("{\"data\":[");
+        buf.append("[");
         boolean first = true;
         synchronized(jobinfo_list) {
             for (Enumeration<Jobinfo> e = jobinfo_list.elements(); e.hasMoreElements(); ) {
@@ -379,12 +383,12 @@ public class Procstat {
                 buf.append("\"}");
             }//for
         }//sync(jobinfo_list)
-        buf.append("\n]}\n");
+        buf.append("\n]\n");
         return buf.toString();
     }//jobDiscovery()
 
     public static Float getPercentage(int minutes, String jobnum, String usrname, String jobname,
-                                      String subsystem) throws ZbxException {
+                                      String subsystem, boolean allow_empty) throws ZbxException {
         Query query = null;
         String key = jobnum + '/' + usrname + '/' + jobname + '/' + subsystem;
         synchronized (query_list) {
@@ -394,7 +398,36 @@ public class Procstat {
                 query_list.put(key, query);
             }//(query was absent in the list)
         }//sync(query_list)
-        return query.getPercentage(minutes);
+        return query.getPercentage(minutes, allow_empty);
     }//getPercentage()
+
+    public static String jobGet(int seconds, int mode) throws ZbxException {
+        long ms = seconds * 1000;
+        StringBuilder buf = new StringBuilder();
+        buf.append("[");
+        boolean first = true;
+        synchronized(jobinfo_list) {
+            for (Enumeration<Jobinfo> e = jobinfo_list.elements(); e.hasMoreElements(); ) {
+                Jobinfo ji = e.nextElement();
+                if (ms >= ji.cpu_used)
+                    continue;
+                if (first) 
+                    first = false;
+                else
+                    buf.append(",");
+                buf.append("\n {\"num\":\"");
+                buf.append(ji.jobnum);
+                buf.append("\",\"user\":\"");
+                buf.append(ji.usrname);
+                buf.append("\",\"name\":\"");
+                buf.append(ji.jobname);
+                buf.append("\",\"usage\":");
+                buf.append(getPercentage(mode, ji.jobnum, ji.usrname, ji.jobname, "", true));
+                buf.append("}");
+            }//for
+        }//sync(jobinfo_list)
+        buf.append("\n]\n");
+        return buf.toString();
+    }//jobDiscovery()
 
 }//class Procstat()

@@ -1,7 +1,7 @@
 package as400.metric;
 import as400.*;
 import as400.perfstat.*;
-import as400.thread.ZabbixThread;
+import as400.thread.As400Thread;
 import com.ibm.as400.access.*;
 import com.ibm.as400.data.*;
 import java.io.*;
@@ -10,11 +10,24 @@ import java.beans.PropertyVetoException;
 
 public class As400Metrics {
 
-    static class As400Result {
+    static class As400Result extends Thread {
+        AS400 system;
+        int i;
         boolean result;
-        public As400Result(boolean value) {
-            this.result = value;
+
+        public As400Result(AS400 system, int i) {
+            this.system = system;
+            this.i = i;
+            this.result = false;
         }//Constructor
+
+        //run method override
+        public void run() {
+            Util.log(Util.LOG_DEBUG, "   Child thread is started for service %d", this.i);
+            this.result = this.system.isConnectionAlive(this.i);
+            Util.log(Util.LOG_DEBUG, "   Child thread is finished, result is: %b", this.result);
+        }//run()
+
     }//internal static class
 
     //class variables
@@ -27,18 +40,63 @@ public class As400Metrics {
 
         //initialization of anonymous classes for generic agent metrics
         try {
-            new ZbxMetric("system.hostname", Util.CF_AS400COMM) {
+            new ZbxMetric("system.hostname", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     if (null == req)
                         throw new ZbxException("Bad request");
-                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
-                    String s;
+
+                    AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
+                    String tmp, type, s;
+                    int N = req.getNparam();
+                    //1-st parameter: <type>
+                    type = N<1 ? "" : req.getParam(0);
+                    switch (type) {
+                        case "":
+                            type = "host";
+                            break;
+                        case "host":
+                        case "shorthost":
+                        case "fqdn":
+                            break;
+                        default:
+                            throw new ZbxException("Invalid <type> parameter: '" + type + "'");
+                    }//switch-case
+                    //2-st parameter: <conversion>
+                    tmp = N<2 ? "" : req.getParam(1);
+                    switch (tmp) {
+                        case "":
+                        case "none":
+                        case "lower":
+                            break;
+                        default:
+                            throw new ZbxException("Invalid second parameter: '" + tmp + "'");
+                    }//switch-case
+
                     try {
-                        s = new SystemStatus(system).getSystemName().toLowerCase();
+                        s = new SystemStatus(system).getSystemName();
                     } catch (AS400SecurityException|ErrorCompletingRequestException|ObjectDoesNotExistException|InterruptedException ex) {
                         Util.log(Util.LOG_WARNING," As400Metric.process() error: %s", ex);
                         throw new ZbxException(ex.toString());
                     }//try-catch
+
+                    switch (type) {
+                        case "shorthost":
+                            N = s.indexOf('.');
+                            if (0 < N)
+                                s = s.substring(0, N);
+                            break;
+                        case "fqdn":
+                            try {
+                                java.net.InetAddress ia = java.net.InetAddress.getByName(s);
+                                s = ia.getCanonicalHostName();
+                            } catch (java.net.UnknownHostException ex) { ; }
+                            break;
+                        default:
+                            break;
+                    }//switch-case
+
+                    if ("lower".equals(tmp))
+                        s = s.toLowerCase();
                     Util.log(Util.LOG_DEBUG,"As400Metric.process() is OK for %s: '%s'",req.getKeyName(), s);
                     return new DataObject(req.getUnparsedKey(), s);
                 }//process()
@@ -52,7 +110,7 @@ public class As400Metrics {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     if (null == req)
                         throw new ZbxException("Bad request");
-                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+                    AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
                     String s;
                     try {
                         s = String.format("IBM OS/400 %s V%dR%dM%d, %s %s (v%s)",
@@ -77,7 +135,7 @@ public class As400Metrics {
             new ZbxMetric("system.localtime", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s",req.getKeyName());
-                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+                    AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
                     String curPar = null;
                     int N = req.getNparam();
                     try {
@@ -115,7 +173,7 @@ public class As400Metrics {
             new ZbxMetric("system.cpu.num", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s",req.getKeyName());
-                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+                    AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
                     String curPar = null;
                     int N = req.getNparam();
                     try {
@@ -144,7 +202,7 @@ public class As400Metrics {
             new ZbxMetric("as400.cpu.capacity", Util.CF_AS400COMM) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s",req.getKeyName());
-                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+                    AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
                     String curPar = null;
                     try {
                         SystemStatus ss = new SystemStatus(system);
@@ -167,7 +225,7 @@ public class As400Metrics {
             new ZbxMetric("system.users.num", Util.CF_AS400COMM) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s",req.getKeyName());
-                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+                    AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
                     try {
                         SystemStatus ss = new SystemStatus(system);
                         ss.refreshCache();
@@ -193,7 +251,7 @@ public class As400Metrics {
                     int N = req.getNparam(), ret = 0;
                     if (N > 4)
                         throw new ZbxException("Bad request: maximum 4 parameters supported");
-                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+                    AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
                     String curPar = null;
                     JobList jl = new JobList(system);
                     try {
@@ -251,13 +309,13 @@ public class As400Metrics {
                             ZbxRegexp regex = new ZbxRegexp(curPar, false);
                             jl.addJobAttributeToRetrieve(Job.SUBSYSTEM);
                             jl.load();
-                            Enumeration jobs = jl.getJobs();
+                            @SuppressWarnings("unchecked") Enumeration<Job> jobs = (Enumeration<Job>)jl.getJobs();
                             while (jobs.hasMoreElements()) {
                                 Job job = null;
                                 String subsystem = null;
                                 //in rare cases some job is disappeared during the job list processing, just ignore such job
                                 try {
-                                    job = (Job)jobs.nextElement();
+                                    job = jobs.nextElement();
                                     subsystem = job.getSubsystem();
                                 } catch (ErrorCompletingRequestException|ObjectDoesNotExistException ex) { }
                                 if (null != subsystem) {
@@ -291,7 +349,7 @@ public class As400Metrics {
                     if (2 != req.getNparam() || "".equals(subsystem = req.getParam(0)) || "".equals(library = req.getParam(1)))
                         throw new ZbxException("Bad request: 2 parameters needed: <subsystem> and <library>");
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s",req.getKeyName());
-                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+                    AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
                     try {
                         Subsystem sbs = new Subsystem(system, library, subsystem);
                         if (sbs.exists()) {
@@ -317,11 +375,11 @@ public class As400Metrics {
             new ZbxMetric("system.run", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     String cmd, library;
-                    StringBuffer s = new StringBuffer();
+                    StringBuilder s = new StringBuilder();
                     if (1 > req.getNparam() || "".equals(cmd = req.getParam(0)))
                         throw new ZbxException("Bad request: command needed");
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s",req.getKeyName());
-                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+                    AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
                     try {
                         CommandCall command = new CommandCall(system);
                         boolean res = command.run(cmd);
@@ -367,7 +425,7 @@ public class As400Metrics {
                     if (2 != req.getNparam() || "".equals(oqueue = req.getParam(0)) || "".equals(library = req.getParam(1)))
                         throw new ZbxException("Bad request: 2 parameters needed: <output queue> and <library>");
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s",req.getKeyName());
-                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+                    AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
                     SpooledFileList sfl = new SpooledFileList(system);
                     try {
                         sfl.setUserFilter("*ALL");
@@ -429,9 +487,10 @@ public class As400Metrics {
                             }//switch-case
                             services = 0x01 << services;
                         }//try-catch
-                    final AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+                    final AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
+                    long timeout = req.getTimeout() / Integer.bitCount(services);
+                    Util.log(Util.LOG_DEBUG, " timeout for a single service is: %d ms", timeout);
                     for (int i = 0, service = 1; i <= 7; i++, service <<= 1) {
-                        final int j = i;
                         Util.log(Util.LOG_DEBUG, " checking connection for a service %d (%d), mask=%d", i, service, services);
                         if (0 == (services & service))
                             continue;
@@ -442,35 +501,17 @@ public class As400Metrics {
                             Util.log(Util.LOG_ERROR, "Error in As400Metric.process(): %s", ex);
                         }//try-catch
                         try {
-                            final As400Result as400Result = new As400Result(false);
-                            ZabbixThread zbxThread = (ZabbixThread)Thread.currentThread();
-                            Thread as400CheckThread = new Thread() {
-                                //run method override
-                                public void run() {
-                                    Util.log(Util.LOG_DEBUG, "   Child thread is started for service %d", j);
-                                    as400Result.result = system.isConnectionAlive(j);
-                                    Util.log(Util.LOG_DEBUG, "   Child thread is finished, result is: %b", as400Result.result);
-                                }//run()
-                            }; //anonymous class
-                            as400CheckThread.start();
-                            as400CheckThread.join(Config.getTimeout_ms());
-                            if (as400CheckThread.isAlive()) {
+                            final As400Result as400Result = new As400Result(system, i);
+                            as400Result.start();
+                            as400Result.join(timeout);
+                            if (as400Result.isAlive()) {
                                 Util.log(Util.LOG_ERROR,
                                     "  Child thread for checking \"as400System.isConnectionAlive()\" was hung. Interrupting...");
                                 system.disconnectService(i);
-                                as400CheckThread.interrupt();
-                                Thread.sleep(4000);
-                                Util.log(Util.LOG_ERROR, "  Status of child thread \"isAlive()\" now: %b", as400CheckThread.isAlive());
-                                if (as400CheckThread.isAlive()) {
-                                    as400CheckThread.stop();
-                                    Thread.sleep(2000);
-                                    Util.log(Util.LOG_ERROR, "  Child thread has been stopped. Its status now: %b", as400CheckThread.isAlive());
-                                }//if(isAlive)
-                                ret |= (service << 8);
+                                as400Result.interrupt();
+                                Thread.sleep(2000);
                             }//if(isAlive)
-/*
-                            if (!system.isConnectionAlive(i))
-*/
+//                            if (!system.isConnectionAlive(i))
                             if (!as400Result.result)
                                 ret |= service;
                         } catch (Throwable ex) {
@@ -492,6 +533,21 @@ public class As400Metrics {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {
                         return new DataObject(req.getUnparsedKey(), QYASPOL.process_asp_discovery());
+                    } finally {
+                        Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
+                    }
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+
+        try {
+            new ZbxMetric("vfs.fs.get", Util.CF_AS400COMM) {
+                public DataObject process(AgentRequest req) throws ZbxException, IOException {
+                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
+                    try {
+                        return new DataObject(req.getUnparsedKey(), QYASPOL.process_asp_get());
                     } finally {
                         Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
                     }
@@ -556,6 +612,21 @@ public class As400Metrics {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
                     try {
                         return new DataObject(req.getUnparsedKey(), QYASPOL.process_dsk_discovery());
+                    } finally {
+                        Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
+                    }
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+
+        try {
+            new ZbxMetric("as400.disk.get", Util.CF_AS400COMM) {
+                public DataObject process(AgentRequest req) throws ZbxException, IOException {
+                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
+                    try {
+                        return new DataObject(req.getUnparsedKey(), QYASPOL.process_dsk_get());
                     } finally {
                         Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
                     }
@@ -649,6 +720,21 @@ public class As400Metrics {
         }//try-catch
 
         try {
+            new ZbxMetric("as400.systemPool.get", Util.CF_AS400COMM) {
+                public DataObject process(AgentRequest req) throws ZbxException, IOException {
+                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
+                    try {
+                        return new DataObject(req.getUnparsedKey(), SystemPoolMetric.process_systemPool_get());
+                    } finally {
+                        Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
+                    }
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+
+        try {
             new ZbxMetric("as400.systemPool.state", Util.CF_AS400COMM | Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException, IOException {
                     String name = null, mode = null;
@@ -726,6 +812,46 @@ public class As400Metrics {
         }//try-catch
 
         try {
+            new ZbxMetric("proc.cpu.util.get", Util.CF_HAVEPARAMS) {
+                public DataObject process(AgentRequest req) throws ZbxException {
+                    Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
+                    int N = req.getNparam(), seconds = 0, mode = 0;
+                    String tmp;
+                    //1-st parameter: <seconds>
+                    if (1 > N || "".equals(tmp = req.getParam(0)))
+                        throw new ZbxException("Bad request: the first parameter needed");
+                    try {
+                        seconds = Integer.parseInt(tmp);
+                        if (1 >= seconds)
+                            throw new ZbxException("");
+                    } catch (NumberFormatException|ZbxException ex) {
+                            throw new ZbxException("Invalid parameter '" + tmp + "': must be a number more than 1");
+                    }//try-catch
+                    //2-nd parameter: <mode>
+                    tmp = 2 > N ? "" : req.getParam(1);
+                    switch (tmp) {
+                        case "":
+                        case "avg1":
+                            mode = 1; break;
+                        case "avg5" :
+                            mode = 5; break;
+                        case "avg15":
+                            mode = 15; break;
+                        default:
+                            throw new ZbxException("Invalid <mode> parameter: '" + tmp + "'");
+                    }//switch-case
+                    try {
+                        return new DataObject(req.getUnparsedKey(), Procstat.jobGet(seconds, mode));
+                    } finally {
+                        Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
+                    }
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+
+        try {
             new ZbxMetric("proc.cpu.util", Util.CF_HAVEPARAMS) {
                 public DataObject process(AgentRequest req) throws ZbxException {
                     Util.log(Util.LOG_DEBUG," As400Metric.process() started for %s", req.getKeyName());
@@ -766,7 +892,7 @@ public class As400Metrics {
 
                     try {
                         return new DataObject(req.getUnparsedKey(), Procstat.getPercentage(mode,
-                                              jobnum, usrname, jobname, subsystem));
+                                              jobnum, usrname, jobname, subsystem, false));
                     } finally {
                         Util.log(Util.LOG_DEBUG," As400Metric.process() ended %s", req.getKeyName());
                     }

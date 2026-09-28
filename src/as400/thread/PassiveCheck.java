@@ -1,9 +1,13 @@
 //import com.ibm.as400.access.*;
 package as400.thread;
 import as400.*;
+import as400.comms.*;
 import java.util.ArrayList;
 import java.io.*;
 import java.net.*;
+import org.json.simple.*;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 
 public class PassiveCheck extends ZabbixThread {
 
@@ -37,9 +41,12 @@ public class PassiveCheck extends ZabbixThread {
 
         ServerSocket ss = null;
         try {
-            ss = new ServerSocket(Config.getListenPort(), 50,
-                                    InetAddress.getByName(Config.getListenIP()) );
-            try { ss.setSoTimeout(2000); } catch (SocketException ex) { ; }
+            InetAddress bind_addr = null;
+            if (null != Config.getListenIP()) {
+                bind_addr = InetAddress.getByName(Config.getListenIP());
+            }
+            ss = new ServerSocket(Config.getListenPort(), Config.getListenBacklog(), bind_addr);
+            try { ss.setSoTimeout(1000); } catch (SocketException ex) { ; }
             Socket s;
             while (Config.running) {
                 PassiveCheck t = null;
@@ -93,7 +100,7 @@ public class PassiveCheck extends ZabbixThread {
                     wait ();
                     if (null != this.s) {
                         if (checkConnection(s))
-                            process (s);
+                            processListener (s);
                         //if (null != s)
                         try { s.close(); } catch (IOException ex) { ; }
                         s = null;
@@ -126,23 +133,60 @@ public class PassiveCheck extends ZabbixThread {
         Util.log(Util.LOG_INFO,"%s #%d stopped [%s #%d]", "agent", server_num, Thread.currentThread().getName(), this.process_num);
     }//run()
 
+    private static String ipaddr2string(byte[] addr) {
+        StringBuilder buf = new StringBuilder();
+        buf.append('[');
+        for (int i=0; i<addr.length; i++) {
+            if (0 != i)
+                buf.append('.');
+            buf.append((int)(addr[i] & 0x00FF));
+        }
+        buf.append(']');
+        return buf.toString();
+    }//ipaddr2string()
+
+    private static boolean subnetMatch(int prefix_size, byte[] addr1, byte[] addr2) {
+        byte[] netmask = {0, 0, 0, 0};
+        int i, j;
+
+        //CIDR notation to subnet mask
+        for (i = (int)prefix_size, j = 0; i > 0 && j < 4; i -= 8, j++) {
+            netmask[j] = (byte)(i >= 8 ? 0xFF : ~((1 << (8 - i)) - 1));
+        }//for
+        if (Util.LOG_TRACE1 <= Config.getDebugLevel())
+            Util.log(Util.LOG_DEBUG," TRACE: netmask=%s, addr1=%s, addr2=%s", ipaddr2string(netmask), ipaddr2string(addr1), ipaddr2string(addr2));
+
+        //The result of the bitwise AND operation of IP address and the subnet mask is the network prefix.
+        //All hosts on a subnetwork have the same network prefix.
+        for (i = 0; i < 4; i++) {
+            if ((addr1[i] & netmask[i]) != (addr2[i] & netmask[i]))
+                return false;
+        }//for
+        return true;
+    }//subnetMatch()
+
     private boolean checkConnection(Socket s) {
         Util.log(Util.LOG_DEBUG,"in PassiveCheck.checkConnection()");
-        String [] hosts_allowed = Config.getHostsAllowed();
+        ZbxSubnet [] hosts_allowed = Config.getHostsAllowed();
+        String []buf;
+/* this check is made in Config.java during initial parsing of config file
         if (null == hosts_allowed)
             return true;
+*/
         InetAddress peer_address = s.getInetAddress(), all_ips[] = null;
+        byte[] peer_address_in_bytes = peer_address.getAddress();
 
         for (int i = 0; i < hosts_allowed.length; i++) {
             try {
-                all_ips = InetAddress.getAllByName(hosts_allowed[i]);
+                all_ips = InetAddress.getAllByName(hosts_allowed[i].getIp());
             } catch (UnknownHostException ex) {
-                Util.log(Util.LOG_WARNING,"host '%s' from config. file could not be resolved",
-                        hosts_allowed[i]);
+                Util.log(Util.LOG_WARNING,"Host '%s' from config. file could not be resolved, ignored.",
+                    hosts_allowed[i].getIp());
                 continue;
             }//try-catch
+
             for (int j = 0; j < all_ips.length; j++) {
-                if (peer_address.equals(all_ips[j])) {
+                if (subnetMatch(hosts_allowed[i].getPrefixSize(), all_ips[j].getAddress(), peer_address_in_bytes)) {
                     Util.log(Util.LOG_DEBUG,"end of PassiveCheck.checkConnection(): true");
                     return true;
                 }
@@ -154,8 +198,38 @@ public class PassiveCheck extends ZabbixThread {
         return false;
     }//checkConnection()
 
+    private void processPassiveCheckJSON(OutputStream zbxOut, JSONObject jsonObj) throws IOException {
+        ZbxAnswer result = null;
+        String str;
+
+        try {
+            if (!"passive checks".equals((String)jsonObj.get("request")))
+                throw new ZbxException("unknown request");
+            JSONArray ja = (JSONArray)jsonObj.get("data");
+            if (null == ja)
+                throw new ZbxException("cannot find the \"data\" array in the received JSON object");//received empty \"data\" tag"
+            for (Object o: ja) {
+                JSONObject  row = (JSONObject)o;
+                str             = (String)row.get("key");
+                Object  timeout = row.get("timeout");
+                long timeout_ms = Interval.time2long(timeout.toString());
+
+                DataObject dobj = ZabbixAgent.zbxExecuteAgentCheck(new AgentRequest(str), Util.ZBX_PROCESS_WITH_ALIAS, timeout_ms);
+                result = new ZbxAnswer(true, dobj.getValue().toString());
+            }//for(ja)
+        } catch (ClassCastException|NullPointerException|ZbxException ex) {
+            result = new ZbxAnswer(false,
+                (ex instanceof ZbxException ? ex.getMessage() : ex.toString()) );
+        }//try-catch
+
+        str = result.toString();
+        Util.log(Util.LOG_DEBUG,"PassiveCheck.process(): sending result: '%s'", str);
+        zbxOut.write(ZbxSender.toBytes(str));
+        zbxOut.flush();
+    }//processPassiveCheckJSON()
+
     //real processing of incoming request
-    private void process(Socket s) {
+    private void processListener(Socket s) {
         Util.log(Util.LOG_DEBUG,"in PassiveCheck.process(), #%d", process_num);
 
         InputStream  zbxIn  = null;
@@ -182,6 +256,17 @@ public class PassiveCheck extends ZabbixThread {
                     reqData = new byte[len];
                     read = zbxIn.read(reqData);
                     requestStr = new String(reqData, Util.getUtf8());
+
+                    try {
+                        JSONParser parser = new JSONParser();
+                        JSONObject jsonObj = (JSONObject)parser.parse(requestStr);
+                        Util.log(Util.LOG_DEBUG, "PassiveCheck.process(): request is JSON: '%s'.", requestStr);
+                        processPassiveCheckJSON(zbxOut, jsonObj);
+                        return;
+                    } catch (ParseException|ClassCastException ex) {
+                        Util.log(Util.LOG_DEBUG, "PassiveCheck.process(): request is not JSON, continue using old protocol");
+                    }//try-catch
+
                 }//if (header is OK)
             } else {//header is absent: process it just as a command
                 if (0 < read) {
@@ -205,10 +290,10 @@ public class PassiveCheck extends ZabbixThread {
                 if (i > 0)
                     requestStr = requestStr.substring(0, i);
             }
-            if (null != requestStr || 0 < requestStr.length()) {
+            if (null != requestStr && 0 < requestStr.length()) {
                 try {
                     Util.log(Util.LOG_DEBUG,"PassiveCheck.process(): request is: '%s'", requestStr);
-                    DataObject dobj = ZabbixAgent.process(new AgentRequest(requestStr));
+                    DataObject dobj = ZabbixAgent.zbxExecuteAgentCheck(new AgentRequest(requestStr), Util.ZBX_PROCESS_WITH_ALIAS, 0);
                     responseStr = dobj.getValue().toString();
                 } catch (ZbxException ex) {
                     responseStr = "ZBX_NOTSUPPORTED"+'\0'+ex.getMessage();
@@ -229,6 +314,6 @@ public class PassiveCheck extends ZabbixThread {
         }//try-catch
 
         Util.log(Util.LOG_DEBUG,"end of PassiveCheck.process(), #%d", process_num);
-    }//process()
+    }//processListener()
 
 }//class PassiveCheck

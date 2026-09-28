@@ -11,13 +11,14 @@ public class ZbxCache {
     //class variables
     private Hashtable<String,ZbxCacheEntry> ht;
     private ZbxCacheFiller cache_filler;
-    String key_macro, name;
+    String key_macro, key, name;
     private long timeout, expired;
 
-    public ZbxCache(ZbxCacheFiller cache_filler, String key_macro, String name, long timeout) {
+    public ZbxCache(ZbxCacheFiller cache_filler, String key_macro, String key, String name, long timeout) {
         this.ht = new Hashtable<String,ZbxCacheEntry>();
         this.cache_filler = cache_filler;
         this.key_macro = key_macro;
+        this.key = key;
         this.name = name;
         this.timeout = timeout;
         this.expired = 0l;
@@ -72,7 +73,7 @@ public class ZbxCache {
         checkCache();
 
         StringBuilder buf = new StringBuilder();
-        buf.append("{\"data\":[");
+        buf.append("[");
         boolean first = true;
         for (Enumeration<String> e = ht.keys(); e.hasMoreElements(); ) {
             String id = e.nextElement();
@@ -86,10 +87,37 @@ public class ZbxCache {
             buf.append("\":\"");
             buf.append(id);
             buf.append("\"");
-            entry.appendToStringBuilder(buf);
+            entry.appendToDiscovery(buf);
             buf.append("}");
         }//for
-        buf.append("\n]}\n");
+        buf.append("\n]\n");
+        return buf.toString();
+
+    }//discovery()
+
+    public synchronized String get() throws ZbxException, IOException {
+
+        checkCache();
+
+        StringBuilder buf = new StringBuilder();
+        buf.append("[");
+        boolean first = true;
+        for (Enumeration<String> e = ht.keys(); e.hasMoreElements(); ) {
+            String id = e.nextElement();
+            ZbxCacheEntry entry = ht.get(id);
+            if (first) 
+                first = false;
+            else
+                buf.append(",");
+            buf.append("\n {\"");
+            buf.append(key);
+            buf.append("\":\"");
+            buf.append(id);
+            buf.append("\"");
+            entry.appendToGet(buf);
+            buf.append("}");
+        }//for
+        buf.append("\n]\n");
         return buf.toString();
 
     }//discovery()

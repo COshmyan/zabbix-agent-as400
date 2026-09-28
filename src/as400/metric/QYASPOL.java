@@ -18,24 +18,44 @@ class QYASPOL {
     }//inner class Entry
 
     static class AspEntry extends Entry implements ZbxCacheEntry {
+
         String type;
 
-        public void appendToStringBuilder(StringBuilder buf) {
+        public void appendToDiscovery(StringBuilder buf) {
             buf.append(",\"{#FSTYPE}\":\"");
             buf.append(this.type);
             buf.append("\"");
-        }//appendToStringBuilder
+        }//appendToDiscovery()
+
+        public void appendToGet(StringBuilder buf) {
+            buf.append(",\"fstype\":\"");
+            buf.append(this.type);
+            buf.append("\",\"bytes\":{\"total\":");
+            buf.append(this.capacity * 1000000l);
+            buf.append(",\"free\":");
+            buf.append(this.available * 1000000l);
+            buf.append(",\"used\":");
+            buf.append((this.capacity - this.available) * 1000000l);
+            buf.append(",\"pfree\":");
+            buf.append(Util.roundFloat(100.0 * (0 == this.capacity ? 1 : (float)this.available / this.capacity) ) );
+            buf.append(",\"pused\":");
+            buf.append(Util.roundFloat(100.0 * (0 == this.capacity ? 0 : (float)(this.capacity - this.available) / this.capacity) ) );
+            buf.append("},\"state\":");
+            buf.append(this.status & 0x00000000FFFFFFFF);
+        }//appendToGet()
+
     }//inner class AspEntry
 
     static class DskEntry extends Entry implements ZbxCacheEntry {
+
         int unitNo;
         int aspNum;
         String type;
         String model;
         String name;
 
-        public void appendToStringBuilder(StringBuilder buf) {
-            buf.append(    ",\"{#DSK_ID}\":\"");
+        public void appendToDiscovery(StringBuilder buf) {
+            buf.append(  ",\"{#DSK_ID}\":\"");
             buf.append(this.unitNo);
             buf.append("\",\"{#DSK_TYPE}\":\"");
             buf.append(this.type);
@@ -46,7 +66,46 @@ class QYASPOL {
             buf.append("\",\"{#DSK_ASP}\":\"");
             buf.append(this.aspNum);
             buf.append("\"");
-        }//appendToStringBuilder
+        }//appendToDiscovery()
+
+        public void appendToGet(StringBuilder buf) {
+            buf.append(  ",\"dsk_id\":\"");
+            buf.append(this.unitNo);
+            buf.append("\",\"dsk_type\":\"");
+            buf.append(this.type);
+            buf.append("\",\"dsk_model\":\"");
+            buf.append(this.model);
+            buf.append("\",\"dsk_name\":\"");
+            buf.append(this.name);
+            buf.append("\",\"dsk_asp\":\"");
+            buf.append(this.aspNum);
+            buf.append("\",\"bytes\":{\"total\":");
+            buf.append(this.capacity * 1000000l);
+            buf.append(",\"free\":");
+            buf.append(this.available * 1000000l);
+            buf.append(",\"used\":");
+            buf.append((this.capacity - this.available) * 1000000l);
+            buf.append(",\"pfree\":");
+            buf.append(Util.roundFloat(100.0 * (0 == this.capacity ? 1 : (float)this.available / this.capacity) ) );
+            buf.append(",\"pused\":");
+            buf.append(Util.roundFloat(100.0 * (0 == this.capacity ? 0 : (float)(this.capacity - this.available) / this.capacity) ) );
+            buf.append("},\"state\":");
+
+            if (0 == this.aspNum) {
+                buf.append(4294967295l);
+            } else {
+                long asp_state = 1; //1==varyoff, 2==varyon
+                try {
+                    asp_state = ((Long)process_asp(Integer.toString(this.aspNum), "state")).longValue();
+                } catch (ZbxException|IOException ex) { ; }
+                if (1 == asp_state || 2 == asp_state) {
+                    buf.append(4294967295l);
+                } else {
+                    buf.append(this.status & 0x00000000FFFFFFFF);
+                }
+            }//if(asp not available)
+        }//appendToGet()
+
     }//inner class DskEntry
 
     private static void raiseException(String programName, ProgramCallDocument pcml) throws ZbxException, PcmlException {
@@ -63,7 +122,7 @@ class QYASPOL {
         public void fill() throws ZbxException, IOException {
             Util.log(Util.LOG_DEBUG, " QYASPOL.aspCacheFiller.fill() started");
 
-            AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+            AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
             ProgramCallDocument pcml = null;
             byte [] reqHandle = null;
             int rcdsTotal;              //total number of records in the list
@@ -221,7 +280,7 @@ class QYASPOL {
         public void fill() throws ZbxException, IOException {
             Util.log(Util.LOG_DEBUG, " QYASPOL.dskCacheFiller.fill() started");
 
-            AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+            AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
             ProgramCallDocument pcml = null;
             byte [] reqHandle = null;
             int rcdsTotal;              //total number of records in the list
@@ -335,11 +394,15 @@ class QYASPOL {
 
     //static class variables
     private static final long TIMEOUT_MS = 5000l;//5 seconds
-    private static ZbxCache aspTable = new ZbxCache(new aspCacheFiller(), "{#FSNAME}", "aspTable", TIMEOUT_MS);
-    private static ZbxCache dskTable = new ZbxCache(new dskCacheFiller(), "{#DSK_SN}", "dskTable", TIMEOUT_MS);
+    private static ZbxCache aspTable = new ZbxCache(new aspCacheFiller(), "{#FSNAME}", "fsname", "aspTable", TIMEOUT_MS);
+    private static ZbxCache dskTable = new ZbxCache(new dskCacheFiller(), "{#DSK_SN}", "dsk_dn", "dskTable", TIMEOUT_MS);
 
     static String process_asp_discovery() throws ZbxException, IOException {
         return aspTable.discovery();
+    }//process_asp_discovery()
+
+    static String process_asp_get() throws ZbxException, IOException {
+        return aspTable.get();
     }//process_asp_discovery()
 
     static Object process_asp(String id, String mode) throws ZbxException, IOException {
@@ -372,6 +435,10 @@ class QYASPOL {
 
     static String process_dsk_discovery() throws ZbxException, IOException {
         return dskTable.discovery();
+    }//process_dsk_discovery()
+
+    static String process_dsk_get() throws ZbxException, IOException {
+        return dskTable.get();
     }//process_dsk_discovery()
 
     static Object process_dsk(String id, String mode) throws ZbxException, IOException {

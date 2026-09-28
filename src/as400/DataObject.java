@@ -24,8 +24,7 @@ public class DataObject {
 
     //Obligatory fields
     long clock_ms;       //unsigned int
-//    long ns;          //unsigned int
-    String host;      //(128)
+    long itemid;
     String key;       //(255)
     Object value;     //
     //Optional fields
@@ -38,10 +37,9 @@ public class DataObject {
     String source;    //(64)
     byte flags;       //
 
-    public DataObject(String key, Object value) {
+   public DataObject(String key, Object value) {
         this.clock_ms    = Util.currentTimeMillis();
-//        this.ns          = 0l;
-        this.host        = Config.getHostname();
+        this.itemid      = 0l;
         this.key         = key;
         this.value       = value;
         this.state_notsupported = false;
@@ -60,22 +58,6 @@ public class DataObject {
     public void setClock_ms(long clock_ms) {
         this.clock_ms = clock_ms;
     }
-/*
-    public long getNs() {
-        return ns;
-    }
-
-    public void setNs(long ns) {
-        this.ns = ns;
-    }
-*/
-    public String getHost() {
-        return host;
-    }
-
-    public void setHost(String host) {
-        this.host = host;
-    }
 
     public String getKey() {
         return key;
@@ -83,6 +65,14 @@ public class DataObject {
 
     public void setKey(String key) {
         this.key = key;
+    }
+
+    public long getItemid() {
+        return itemid;
+    }
+
+    public void setItemid(long itemid) {
+        this.itemid = itemid;
     }
 
     public Object getValue() {
@@ -169,28 +159,27 @@ public class DataObject {
         this.flags &= (~flag);
     }
 
-    public String toString(int id){
-        StringBuffer sb = new StringBuffer();
-        sb.append(" {\"host\":\"");
-        sb.append(org.json.simple.JSONValue.escape(host));
-        sb.append("\",\n  \"key\":\"");
-        sb.append(org.json.simple.JSONValue.escape(key));
-        sb.append("\"");
+    public String toString(long id){
+        StringBuilder sb = new StringBuilder();
+        sb.append(" {\"itemid\":");
+        sb.append(itemid);
         if (null != value)
-            sb.append(",\n  \"value\":").append(org.json.simple.JSONValue.toJSONString(value));
+            sb.append(",\n  \"value\":").append(org.json.simple.JSONValue.toJSONString(value.toString()));
         sb.append(",\n  \"id\":");
         sb.append(id);
         sb.append(",\n  \"clock\":");
         sb.append(clock_ms / 1000);             //ms -> seconds
         sb.append(",\n  \"ns\":");
         sb.append( (clock_ms % 1000) * 1000000);//ms -> ns
-        if (state_notsupported)
+        if (state_notsupported) {
             sb.append(",\n  \"state\":1");
-        if (0  != (ActiveCheck.ZBX_METRIC_FLAG_LOG & flags))
-            sb.append(",\n  \"lastlogsize\":").append(lastlogsize);
-//        if (0  != (ActiveCheck.ZBX_METRIC_FLAG_LOG_LOGRT & flags))
-        if (0  != (ActiveCheck.ZBX_METRIC_FLAG_LOG & flags))
-            sb.append(",\n  \"mtime\":").append(mtime);
+        } else {
+            if (0  != (ActiveCheck.ZBX_METRIC_FLAG_LOG & flags))
+                sb.append(",\n  \"lastlogsize\":").append(lastlogsize);
+//            if (0  != (ActiveCheck.ZBX_METRIC_FLAG_LOG_LOGRT & flags))
+            if (0  != (ActiveCheck.ZBX_METRIC_FLAG_LOG & flags))
+                sb.append(",\n  \"mtime\":").append(mtime);
+        }//if(state_notsupported)
         if (-1l != severity)
             sb.append(",\n  \"severity\":").append(severity);
         if (0l != eventid)

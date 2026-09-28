@@ -104,12 +104,14 @@ public class ZbxRegexp {
         this.pattern = null;
         this.subexpr_list = new ArrayList<Subexp>();
         this.subexpr_list.add(new Subexp(type, str, delimiter, case_sensitive));
+        Util.log(Util.LOG_TRACE1, " ZbxRegexpr(): '%s' = '%s'", name, str);
     }//constructor ZbxRegexp()
 
     public void addSubexp(int type, String str, char delimiter, boolean case_sensitive) {
         if (null == this.subexpr_list)
             this.subexpr_list = new ArrayList<Subexp>();
         this.subexpr_list.add(new Subexp(type, str, delimiter, case_sensitive));
+        Util.log(Util.LOG_TRACE1, " addSubexp(): '%s' = '%s'", this.name, str);
     }//addSubexp()
 
     public boolean matches(String str) {

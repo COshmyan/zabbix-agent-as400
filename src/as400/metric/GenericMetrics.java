@@ -4,7 +4,8 @@ import as400.*;
 public class GenericMetrics {
 
     //constants
-    public static final String VERSION = "0.7.9";
+    public static final String VERSION = "0.8.0-alpha1";
+    public static final String VARIANT = "1";
 
     static class ActiveOnlyMetric extends ZbxMetric {
 
@@ -68,6 +69,20 @@ public class GenericMetrics {
         }//try-catch
 
         try {
+            new ZbxMetric("agent.hostmetadata", 0) {
+                public DataObject process(AgentRequest req) throws ZbxException {
+                    if (null == req)
+                        throw new ZbxException("Bad request");
+                    Util.log(Util.LOG_DEBUG,"GenericMetric.process() is OK for %s",req.getKeyName());
+                    String str = Config.getHostMetadata();
+                    return new DataObject(req.getUnparsedKey(), (null == str) ? "" : str);
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+
+        try {
             new ZbxMetric("agent.ping", 0) {
                 public DataObject process(AgentRequest req) throws ZbxException {
                     if (null == req)
@@ -94,6 +109,19 @@ public class GenericMetrics {
         }//try-catch
 
         try {
+            new ZbxMetric("agent.variant", 0) {
+                public DataObject process(AgentRequest req) throws ZbxException {
+                    if (null == req)
+                        throw new ZbxException("Bad request");
+                    Util.log(Util.LOG_DEBUG,"GenericMetric.process() is OK for %s",req.getKeyName());
+                    return new DataObject(req.getUnparsedKey(), VARIANT);
+                }//process()
+            };//new anonymous class
+        } catch (ZbxException ex) {
+            Util.log(Util.LOG_ERROR,"%s",ex);
+        }//try-catch
+
+        try {
             new ZbxMetric("agent.debug.active.thread", 0) {
                 public DataObject process(AgentRequest req) throws ZbxException {
                     if (null == req)
@@ -108,7 +136,7 @@ public class GenericMetrics {
                         buf.append("\nState=");
                         buf.append(t.getState().toString());
                         buf.append("\nActiveCount=");
-                        buf.append(t.activeCount());
+                        buf.append(Thread.activeCount());
                         buf.append("\nStackTrace:\n");
                         StackTraceElement []st = t.getStackTrace();
                         for (int j = 0; j < st.length; j++) {

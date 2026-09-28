@@ -4,7 +4,7 @@ import com.ibm.as400.access.AS400;
 import com.ibm.as400.access.SocketProperties;
 import java.beans.PropertyVetoException;
 
-public abstract class ZabbixThread extends Thread implements Thread.UncaughtExceptionHandler {
+public abstract class ZabbixThread extends Thread implements Thread.UncaughtExceptionHandler, As400Thread {
 
     //class variables
     protected AS400  system = null;

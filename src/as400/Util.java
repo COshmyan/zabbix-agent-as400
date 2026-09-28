@@ -1,7 +1,7 @@
-//package lv.rietumu.as400;
 package as400;
 import java.io.*;
 import java.nio.charset.Charset;
+import java.util.Locale;
 
 public class Util {
 
@@ -19,7 +19,13 @@ public class Util {
     public static final int CF_USERPARAMETER= 0x04; //item is defined as user parameter
     public static final int CF_AS400COMM    = 0x80000000; //real communication to AS/400 system is needed for obtaining value of this item
 
+    //originally from "sysinfo.h"
+    public static final int ZBX_PROCESS_LOCAL_COMMAND   = 0x01;
+    public static final int ZBX_PROCESS_MODULE_COMMAND  = 0x02; //we really don't use this constant as we don't use modules
+    public static final int ZBX_PROCESS_WITH_ALIAS      = 0x04;
+
     private static final java.text.SimpleDateFormat ts = new java.text.SimpleDateFormat("yyyyMMdd:HHmmss.SSS");
+    private static java.text.NumberFormat nf = null;
     static Charset utf8 = null;
 
     private static Long stored_ts   = new Long(0l);
@@ -30,6 +36,9 @@ public class Util {
     private static StringBuilder buf = null;
 
     public static synchronized void log(int level, String message, Object... args) {
+        Thread t = Thread.currentThread();
+        if (t instanceof as400.thread.RequestThread)
+            t = ((as400.thread.RequestThread)t).getParentThread();
         if (Config.getDebugLevel() >= level) {
             try {
                 if (null == out) {
@@ -42,20 +51,20 @@ public class Util {
                         //create new  PrintWriter from the File with autoflushing using the specified charset
                         out = new PrintWriter(new OutputStreamWriter(new FileOutputStream(outFile,true), Util.getUtf8()), true);
                         if (null != buf) {
-                            out.println(buf.toString());
+                            out.printf("%n%s%n", buf.toString());
                             buf = null;
                             if (LOG_WARNING <= Config.getDebugLevel()) {
-                                out.printf("\n%7d:%s ", Thread.currentThread().getId(), ts.format(new java.util.Date()));
-                                out.println("Logging switched from the buffer to the log file '" + Config.getLogFile() + "'\n");
+                                out.printf("%6d:%s Logging switched from the buffer to the log file '%s'%n%n",
+                                    t.getId(), ts.format(new java.util.Date()), Config.getLogFile());
                             }
                         }//if (buf)
                     } else {
                         //Config is not processed yet, so we know nothing about log file name; therefore store to the buffer
                         if (null == buf)
                             buf = new StringBuilder();
-                        buf.append(String.format("%7d:%s ", Thread.currentThread().getId(), ts.format(new java.util.Date())));
+                        buf.append(String.format("%6d:%s ", t.getId(), ts.format(new java.util.Date())));
                         buf.append(String.format(message, args));
-                        buf.append('\n');
+                        buf.append(System.lineSeparator());
                         return;
                     }//if (configured)
                 } else {
@@ -63,11 +72,11 @@ public class Util {
                         rotateLog();
                     }//if needed to rotate
                 }//if (out initialized)
-                out.printf("% 6d:%s ", Thread.currentThread().getId(), ts.format(new java.util.Date()));
+                out.printf("% 6d:%s ", t.getId(), ts.format(new java.util.Date()));
                 out.printf(message, args);
                 out.println();
             } catch (IOException ie) {
-                    System.out.println ("Error writing to log file " + Config.getLogFile() + ":\n" + ie.toString());
+                    System.out.printf ("Error writing to log file '%s':%n%s%n", Config.getLogFile(), ie.toString());
                     System.exit(1);
             }//try-catch block
         }//if
@@ -78,7 +87,7 @@ public class Util {
         if (null != out)
             ex.printStackTrace(out);
         else
-            log(level, "\n%s\n", ex);
+            log(level, "%n%s%n", ex);
     }//log()
 
     private static void rotateLog() {
@@ -109,7 +118,7 @@ public class Util {
                 out.println(buf.toString());
                 out.close();
             } catch (IOException ie) {
-                System.out.println ("Error writing to log file " + Config.getLogFile() + ":\n" + ie.toString());
+                System.out.printf ("Error writing to log file '%s':%n%s%n", Config.getLogFile(), ie.toString());
                 System.out.println (buf.toString());
             }//try-catch
         }//if(buf)
@@ -158,5 +167,77 @@ public class Util {
         }//for
         return rez;
     }//long2key()
+
+    public static String createToken(int hash) {
+        long current_ts = System.currentTimeMillis();
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
+            md.update(long2key((long)hash));
+            md.update(long2key(current_ts));
+            return String.format("%032x", new java.math.BigInteger(1, md.digest()));
+        } catch (java.security.NoSuchAlgorithmException ex) {
+            return String.format("%08x%016x1234abcd",hash,current_ts);
+        }//try-catch
+    }//createToken()
+
+    public static String zbxWildcardMinimize(String str) {
+        while (0 <= str.indexOf("**")) {
+            str = str.replace("**", "*");
+        }//while
+        return str;
+    }//zbxWildcardMinimize()
+
+    public static boolean zbxWildcardMatch(String str, String pattern) {
+        int s1 = 0, s2 = 0, p1 = 0, p2 = 0, len;
+        int str_len = str.length(), pat_len = pattern.length();
+
+        if (0 > (p2 = pattern.indexOf('*')) )
+            //if pattern does not contain '*', then just compare them as strings
+            return str.equals(pattern);
+
+        str_len = str.length();
+        pat_len = pattern.length();
+        len = p2;   //length of substring before '*'
+
+        if (0 < len) {
+            if (!str.regionMatches(0, pattern, 0, len))
+                return false;
+            s1 += len;  //next unchecked char (can be outside of str)
+        }//if
+
+        for ( ; ; ) {
+            //is '*' the last char of pattern?
+            if (pat_len == ++p2)
+                return true;
+            p1 = p2;  //next char after '*' (it is NOT the end of string, we checked it already)
+
+            if (0 > (p2 = pattern.indexOf('*', p1)) ) {
+                //If there is no more '*' in pattern, then str matches if it ends with the rest of pattern
+                //and this matching part starts at least at s1 position (not before).
+                //I.e. pattern 'abc*abcd' should not match with 'abcd' string.
+                len = pat_len - p1;
+                return (s1 + len <= str_len) && str.regionMatches(str_len - len, pattern, p1, len);
+            }
+            //We are here if a new '*' found.
+            //So, we need to find next substring part of pattern before '*'.
+            if (0 > (s2 = str.indexOf(pattern.substring(p1, p2), s1)) )
+                return false;   //if not found - there is no matching
+            //otherwise: found
+            len = p2 - p1;
+            p1 = p2;
+            s1 = s2 + len;  //can be end of str
+        }//for()
+
+    }//zbxWildcardMatch()
+
+
+    public static String roundFloat(double value) {
+        if (null == nf) {
+            nf = java.text.NumberFormat.getNumberInstance(Locale.US);
+            nf.setMaximumFractionDigits(6);
+            nf.setRoundingMode(java.math.RoundingMode.HALF_UP);
+        }
+        return nf.format(value);
+    }//roundFloat()
 
 }//class Util

@@ -16,13 +16,17 @@ class qgyoljob {
         long cpuUsedPercentage;
         long cpuUsedElapsed;
 
-        public void appendToStringBuilder(StringBuilder buf) {
+        public void appendToDiscovery(StringBuilder buf) {
 /*
             buf.append(",\"{#FSTYPE}\":\"");
             buf.append(this.type);
             buf.append("\"");
 */
-        }//appendToStringBuilder
+        }//appendToDiscovery()
+
+        public void appendToGet(StringBuilder buf) {
+        }//appendToGet()
+
     }//inner class JobEntry
 
     static class JobCacheFiller implements ZbxCacheFiller {
@@ -30,7 +34,7 @@ class qgyoljob {
             Util.log(Util.LOG_DEBUG, " qgyoljob.aspCacheFiller.fill() started");
 
             try {
-                AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+                AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
 
                 Util.log(Util.LOG_DEBUG, "  Constructing the ProgramCallDocument");
                 try {
@@ -96,7 +100,7 @@ class qgyoljob {
 
     //static class variables
     private static final long TIMEOUT_MS = 5000l;//5 seconds
-    private static ZbxCache jobTable = new ZbxCache(new JobCacheFiller(), "{#JOB}", "jobTable", TIMEOUT_MS);
+    private static ZbxCache jobTable = new ZbxCache(new JobCacheFiller(), "{#JOB}", "job", "jobTable", TIMEOUT_MS);
 
     static String process_job_discovery() throws ZbxException, IOException {
         return jobTable.discovery();

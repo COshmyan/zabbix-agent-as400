@@ -19,13 +19,28 @@ class SystemPoolMetric {
         float databaseFaults;
         float nonDatabaseFaults;
 
-        public void appendToStringBuilder(StringBuilder buf) {
+        public void appendToDiscovery(StringBuilder buf) {
             buf.append(",\"{#ID}\":\"");
             buf.append(this.identifier);
             buf.append("\",\"{#DESCR}\":\"");
             buf.append(this.description);
             buf.append("\"");
-        }//appendToStringBuilder()
+        }//appendToDiscovery()
+
+        public void appendToGet(StringBuilder buf) {
+            buf.append(",\"id\":\"");
+            buf.append(this.identifier);
+            buf.append("\",\"descr\":\"");
+            buf.append(this.description);
+            buf.append("\",\"size\":");
+            buf.append(this.size * 1024l);
+            buf.append(",\"databaseFaults\":");
+            buf.append(this.databaseFaults);
+            buf.append(",\"nonDatabaseFaults\":");
+            buf.append(this.nonDatabaseFaults);
+            buf.append(",\"totalFaults\":");
+            buf.append(this.databaseFaults + this.nonDatabaseFaults);
+        }//appendToGet()
     }//inner class SystemPoolMetricEntry
 
     static class SystemPoolMetricCacheFiller implements ZbxCacheFiller {
@@ -58,13 +73,13 @@ class SystemPoolMetric {
 
         public void fill() throws ZbxException, IOException {
             Util.log(Util.LOG_DEBUG, " SystemPoolMetricCacheFiller.fill() started");
-            AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+            AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
             SystemStatus ss = new SystemStatus(system);
 
             try {
-                Enumeration spList = ss.getSystemPools();
+                @SuppressWarnings("unchecked") Enumeration<SystemPool> spList = (Enumeration<SystemPool>)ss.getSystemPools();
                 while (spList.hasMoreElements()) {
-                    SystemPool sp = (SystemPool)spList.nextElement();
+                    SystemPool sp = spList.nextElement();
                     try {
                         if (null == fill(sp))
                             continue;
@@ -100,17 +115,21 @@ class SystemPoolMetric {
 
     //static class variables
     private static ZbxCache systemPoolTable = new ZbxCache(new SystemPoolMetricCacheFiller(),
-                                                            "{#NAME}", "systemPoolTable", 5000l);
+                                                            "{#NAME}", "name", "systemPoolTable", 5000l);
 
     static String process_systemPool_discovery() throws ZbxException, IOException {
         return systemPoolTable.discovery();
+    }//process_systemPool_discovery()
+
+    static String process_systemPool_get() throws ZbxException, IOException {
+        return systemPoolTable.get();
     }//process_systemPool_discovery()
 
     static Object process_systemPool(String name, String mode) throws ZbxException, IOException {
         SystemPoolMetricEntry spme = (SystemPoolMetricEntry)systemPoolTable.getEntry(name);
         if (null == spme) {
             Util.log(Util.LOG_WARNING, " process_systemPool(): there is no '%s' pool found", name);
-            AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+            AS400 system = ((As400Thread)Thread.currentThread()).getAs400();
             SystemPool sp = new SystemPool(system, name);
             spme = SystemPoolMetricCacheFiller.fill(sp);
         }//if(not found)
