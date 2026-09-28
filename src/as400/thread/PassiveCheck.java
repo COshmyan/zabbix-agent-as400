@@ -167,53 +167,46 @@ public class PassiveCheck extends ZabbixThread {
             zbxIn  = s.getInputStream();
             zbxOut = s.getOutputStream();
             int i = -1, len = ZbxSender.header.length; //length of header only
-            byte[] respData = new byte[1024];
-            int read = zbxIn.read(respData, 0, len);
-            if ( len == read && respData[0] == ZbxSender.header[0] &&
-                                respData[1] == ZbxSender.header[1] &&
-                                respData[2] == ZbxSender.header[2] &&
-                                respData[3] == ZbxSender.header[3] &&
-                                respData[4] == ZbxSender.header[4] ) {
+            byte[] reqData = new byte[1024];
+            int read = zbxIn.read(reqData, 0, len);
+            if ( len == read && reqData[0] == ZbxSender.header[0] &&
+                                reqData[1] == ZbxSender.header[1] &&
+                                reqData[2] == ZbxSender.header[2] &&
+                                reqData[3] == ZbxSender.header[3] &&
+                                reqData[4] == ZbxSender.header[4] ) {
                 len = 8;    //length of the size field
-                read = zbxIn.read(respData, read, len);
-                if (len == read && (len = ZbxSender.checkHeader(respData)) > 0) {
+                read = zbxIn.read(reqData, read, len);
+                if (len == read && (len = ZbxSender.checkHeader(reqData)) > 0) {
                     //read the length of real datas
                     Util.log(Util.LOG_DEBUG,"ZBXD header is OK, data length=%d",len);
-                    respData = new byte[len];
-                    read = zbxIn.read(respData);
-                    requestStr = new String(respData, Util.getUtf8());
+                    reqData = new byte[len];
+                    read = zbxIn.read(reqData);
+                    requestStr = new String(reqData, Util.getUtf8());
                 }//if (header is OK)
             } else {//header is absent: process it just as a command
-                while (read < respData.length) {
+                while (read < reqData.length) {
                     int c = zbxIn.read();
                     if (0 > c || '\n' == c || '\r' == c) {
-                        respData[read++] = (byte)'\n';
+                        reqData[read++] = (byte)'\n';
                         break;
                     }
-                    respData[read++] = (byte)c;
+                    reqData[read++] = (byte)c;
                 }//
                 if (0 < read) {//found
-                    requestStr = new String(respData, 0, read, Util.getUtf8());
+                    requestStr = new String(reqData, 0, read, Util.getUtf8());
                     Util.log(Util.LOG_DEBUG, "PassiveCheck.process(): request without header is: '%s'",
                         requestStr);
                 }//if (found)
             }//if (header present)
-            if (null != requestStr)
+            if (null != requestStr) {
                 i = requestStr.indexOf('\n');
-            if (i > 0) {
-                try {
+                if (i > 0)
                     requestStr = requestStr.substring(0, i);
+            }
+            if (null != requestStr || 0 < requestStr.length()) {
+                try {
                     Util.log(Util.LOG_DEBUG,"PassiveCheck.process(): request is: '%s'", requestStr);
                     DataObject dobj = ZabbixAgent.process(new AgentRequest(requestStr));
-/*
-                    com.ibm.as400.access.AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
-                    try {
-                        if (system.isConnected())
-                            system.disconnectAllServices();
-                    } catch (Exception ex) {
-                        Util.log(Util.LOG_WARNING, " Error in PassiveCheck.process() during closing AS/400: %s",  ex);
-                    }//try-catch
-*/
                     responseStr = dobj.getValue().toString();
                 } catch (ZbxException ex) {
                     responseStr = "ZBX_NOTSUPPORTED"+'\0'+ex.getMessage();
