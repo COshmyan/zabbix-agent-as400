@@ -144,10 +144,15 @@ public class ZabbixAgent extends ZabbixThread {
                             System.getProperty("java.vm.name",    "unknown"),
                             System.getProperty("java.vm.version", "unknown"),
                             System.getProperty("java.vm.info",    "unknown"));
-        Util.log(Util.LOG_WARNING, " %s", Copyright.version);
 
         try {
-            Class.forName("com.ibm.as400.access.AS400");
+            Class c = Class.forName("com.ibm.as400.access.Copyright");
+            try {
+                java.lang.reflect.Field field = c.getField("version"); 
+                Util.log(Util.LOG_WARNING, " %s", field.get(null).toString());
+            } catch (NoSuchFieldException|IllegalAccessException ex1) {
+                Util.log(Util.LOG_WARNING, " Exception:\n%s\n", ex1);
+            }
             Class.forName("org.json.simple.JSONValue");
         } catch (ClassNotFoundException ex) {
             String library = "<unknown>", message = ex.getMessage();
