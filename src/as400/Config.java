@@ -26,6 +26,7 @@ public class Config {
     private static       String asPassword      = "*CURRENT";
     private static       String as400ServerHost = "localhost";
     private static      boolean as400EventIdAsMessagePrefix = true;
+    private static      boolean as400UserAsMessagePrefix = false;
 
     //variables from config file
     private static String PidFile               = "/tmp/zabbix_agentd.pid";
@@ -61,6 +62,7 @@ public class Config {
     public static String getAs400Password()         {return asPassword;             }
     public static String getAs400ServerHost()       {return as400ServerHost;        }
     public static boolean as400EventIdAsMessagePrefix(){return as400EventIdAsMessagePrefix;}
+    public static boolean as400UserAsMessagePrefix(){return as400UserAsMessagePrefix;}
     public static String getPidFile()               {return PidFile;                }
     public static String getLogFile()               {return LogFile;                }
     public static long   getLogFileSize()           {return LogFileSize;            }
@@ -242,6 +244,9 @@ public class Config {
             break;
         case "as400EventIdAsMessagePrefix":
             as400EventIdAsMessagePrefix = parseBoolean(param_value);
+            break;
+        case "as400UserAsMessagePrefix":
+            as400UserAsMessagePrefix = parseBoolean(param_value);
             break;
         default:
             throw new ZbxException("Invalid parameter");

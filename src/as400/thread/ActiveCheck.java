@@ -510,10 +510,10 @@ public class ActiveCheck extends ZabbixThread {
             String curPar, mqueueName;
             AgentRequest req = metric.agent_request;
             int keySeverity, maxLines, s_count = 0, p_count = 0, max_s_count, N = req.getNparam();
-            ZbxRegexp regex_value, regex_source, regex_eventid;
+            ZbxRegexp regex_value, regex_source, regex_eventid, regex_user;
 
             //parameters check; first parameter must be specified, all other - optional
-            if (1 > N || N > 7)
+            if (1 > N || N > 8)
                 throw new ZbxException("Invalid number of parameters.");
             //param1: mqueue name. If not specified as fully qualified IFS path name, use default path
             if ("".equals(mqueueName = req.getParam(0)))
@@ -559,12 +559,18 @@ public class ActiveCheck extends ZabbixThread {
                 skipMode = false;
             else if (!"skip".equals(curPar))
                 throw new ZbxException("Invalid 7-th parameter (mode): "+curPar);
+            //param8: regexp for current user
+            if ( N < 8 || "".equals(curPar = req.getParam(7)) )
+                regex_user = null;
+            else
+                regex_user = new ZbxRegexp(curPar, false);
 
-            Util.log(Util.LOG_DEBUG," regex_value='%s', regex_source='%s', regex_eventid='%s'",
-                    regex_value, regex_source, regex_eventid);
+            Util.log(Util.LOG_DEBUG," regex_value='%s', regex_source='%s', regex_eventid='%s', regex_user='%s'",
+                    regex_value, regex_source, regex_eventid, regex_user);
             //processing
             try {
-                boolean prefix = Config.as400EventIdAsMessagePrefix();
+                boolean prefix_eventid = Config.as400EventIdAsMessagePrefix();
+                boolean prefix_user    = Config.as400UserAsMessagePrefix();
                 Enumeration mlist = null;
                 mqueue = new MessageQueue(this.system, mqueueName);
                 mqueue.setListDirection(true);  //from oldest to newest
@@ -598,11 +604,12 @@ public class ActiveCheck extends ZabbixThread {
                     String cur_eventid  = msg.getID();
                     String cur_source   = msg.getFromJobName();
                     String cur_value    = msg.getText();
+                    String cur_user     = msg.getCurrentUser();
                     int    cur_type     = msg.getType();
                     long   eventid      = 0l;
                     try { eventid = Long.parseLong(cur_eventid.replaceAll("[^0-9+-]*","")); } catch (NumberFormatException ex) { ; }
-                    Util.log(Util.LOG_DEBUG," New message processed: Key=%08x (%d), severity=%d, Type=%d, EventID='%s', JobName='%s', Value='%s'",
-                            cur_lastlogsize, cur_lastlogsize, cur_severity, cur_type, cur_eventid, cur_source, cur_value);
+                    Util.log(Util.LOG_DEBUG," New message processed: Key=%08x (%d), severity=%d, Type=%d, User='%s', EventID='%s', JobName='%s', Value='%s'",
+                            cur_lastlogsize, cur_lastlogsize, cur_severity, cur_type, cur_user, cur_eventid, cur_source, cur_value);
                     switch (cur_type) {
                     case AS400Message.REPLY_NOT_VALIDITY_CHECKED:
                     case AS400Message.REPLY_VALIDITY_CHECKED:
@@ -612,15 +619,19 @@ public class ActiveCheck extends ZabbixThread {
                         Util.log(Util.LOG_DEBUG,"Message type is 'reply' (%d), ignored", cur_type);
                         continue;
                     }//switch-case
-                    boolean b_regexp, b_source, b_eventid, matched, processed = false;
+                    boolean b_regexp, b_source, b_eventid, b_user, matched, processed = false;
                     b_regexp  = (null == regex_value   || regex_value.matches  (cur_value)  );
                     b_source  = (null == regex_source  || regex_source.matches (cur_source) );
                     b_eventid = (null == regex_eventid || regex_eventid.matches(cur_eventid));
-                    matched = b_regexp && b_source && b_eventid;
-                    Util.log(Util.LOG_DEBUG,"  b_regexp=%b, b_source=%b, b_eventid=%b, matched=%b", b_regexp, b_source, b_eventid, matched);
+                    b_user    = (null == regex_user    || regex_user.matches  (cur_user)   );
+                    matched = b_regexp && b_source && b_eventid && b_user;
+                    Util.log(Util.LOG_DEBUG,"  b_regexp=%b, b_source=%b, b_eventid=%b, b_user=%b, matched=%b",
+                            b_regexp, b_source, b_eventid, b_user, matched);
                     if (matched) {
-                        if (prefix)
+                        if (prefix_eventid)
                             cur_value = cur_eventid + " " + cur_value;
+                        if (prefix_user)
+                            cur_value = ("".equals(cur_user) ? "<blank>" : cur_user) + " " + cur_value;
                         DataObject dobj = new DataObject(metric.key_orig, cur_value);
                         dobj.setTimestamp(msg.getDate().getTimeInMillis() / 1000);  //in seconds
                         dobj.setLastlogsize(cur_lastlogsize);
