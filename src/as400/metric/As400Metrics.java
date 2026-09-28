@@ -10,8 +10,15 @@ import java.beans.PropertyVetoException;
 
 public class As400Metrics {
 
-    //static class variables
-    
+    static class As400Result {
+        boolean result;
+        public As400Result(boolean value) {
+            this.result = value;
+        }//Constructor
+    }//internal static class
+
+    //class variables
+
     public As400Metrics() {
         //system = new AS400(as400ServerHost, Config.getUser(), asPassword);
     }//constructor As400Metrics()
@@ -422,17 +429,54 @@ public class As400Metrics {
                             }//switch-case
                             services = 0x01 << services;
                         }//try-catch
-                    AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
-                    for (int i = 0, service = 1; i < 8; i++, service <<= 1) {
+                    final AS400 system = ((ZabbixThread)Thread.currentThread()).getAs400();
+                    for (int i = 0, service = 1; i <= 7; i++, service <<= 1) {
+                        final int j = i;
+                        Util.log(Util.LOG_DEBUG, " checking connection for a service %d (%d), mask=%d", i, service, services);
                         if (0 == (services & service))
                             continue;
                         try  {
                             if (!system.isConnected(i))
                                 system.connectService(i);
-                        } catch (IOException|AS400SecurityException ex) { ; }
-                        Util.log(Util.LOG_DEBUG, " checking connection for a service %d (%d)", i, service);
-                        if (!system.isConnectionAlive(i))
-                            ret |= service;
+                        } catch (IOException|AS400SecurityException ex) {
+                            Util.log(Util.LOG_ERROR, "Error in As400Metric.process(): %s", ex);
+                        }//try-catch
+                        try {
+                            final As400Result as400Result = new As400Result(false);
+                            ZabbixThread zbxThread = (ZabbixThread)Thread.currentThread();
+                            Thread as400CheckThread = new Thread() {
+                                //run method override
+                                public void run() {
+                                    Util.log(Util.LOG_DEBUG, "   Child thread is started for service %d", j);
+                                    as400Result.result = system.isConnectionAlive(j);
+                                    Util.log(Util.LOG_DEBUG, "   Child thread is finished, result is: %b", as400Result.result);
+                                }//run()
+                            }; //anonymous class
+                            as400CheckThread.start();
+                            as400CheckThread.join(Config.getTimeout_ms());
+                            if (as400CheckThread.isAlive()) {
+                                Util.log(Util.LOG_ERROR,
+                                    "  Child thread for checking \"as400System.isConnectionAlive()\" was hung. Interrupting...");
+                                system.disconnectService(i);
+                                as400CheckThread.interrupt();
+                                Thread.sleep(4000);
+                                Util.log(Util.LOG_ERROR, "  Status of child thread \"isAlive()\" now: %b", as400CheckThread.isAlive());
+                                if (as400CheckThread.isAlive()) {
+                                    as400CheckThread.stop();
+                                    Thread.sleep(2000);
+                                    Util.log(Util.LOG_ERROR, "  Child thread has been stopped. Its status now: %b", as400CheckThread.isAlive());
+                                }//if(isAlive)
+                                ret |= (service << 8);
+                            }//if(isAlive)
+/*
+                            if (!system.isConnectionAlive(i))
+*/
+                            if (!as400Result.result)
+                                ret |= service;
+                        } catch (Throwable ex) {
+                            Util.log(Util.LOG_ERROR, "Error in As400Metric.process(): %s", ex);
+                        }//try-catch
+                        Util.log(Util.LOG_DEBUG, "  result is: %d", ret);
                     }//for
                     Util.log(Util.LOG_DEBUG," As400Metric.process() ended for %s",req.getKeyName());
                     return new DataObject(req.getUnparsedKey(), new Integer(ret));

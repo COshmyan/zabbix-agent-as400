@@ -111,6 +111,7 @@ public class ZabbixAgent extends ZabbixThread {
                     activeCheck[i].start();
                 }//for(ServerActive)
             }//if (ServerActive)
+            Config.setActiveCheck(activeCheck);
             PassiveCheck.init();
             collector.interrupt();
             try { collector.join(500); } catch (InterruptedException ex) { ; }

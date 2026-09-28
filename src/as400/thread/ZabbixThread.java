@@ -4,12 +4,13 @@ import com.ibm.as400.access.AS400;
 import com.ibm.as400.access.SocketProperties;
 import java.beans.PropertyVetoException;
 
-public abstract class ZabbixThread extends Thread {
+public abstract class ZabbixThread extends Thread implements Thread.UncaughtExceptionHandler {
 
     //class variables
     protected AS400  system = null;
     protected int    server_num;
     protected boolean as400_comm_error = false;
+//    private volatile boolean as400Result;
     //static fields
     private static int server_count = -1;
 
@@ -25,6 +26,7 @@ public abstract class ZabbixThread extends Thread {
                 Util.flushLogAndExit();
             }//try-catch
         }//if(configured)
+        setUncaughtExceptionHandler(this);
     }//constructor ZabbixThread()
 
     protected void initAs400() throws PropertyVetoException {
@@ -54,5 +56,18 @@ public abstract class ZabbixThread extends Thread {
     public void setAs400CommError(boolean value) {
         this.as400_comm_error = value;
     }//setAs400CommError
+/*
+    public void setAs400Result(boolean value) {
+        this.as400Result = value;
+    }//setAs400Result
 
+    public boolean getAs400Result() {
+        return this.as400Result;
+    }//getAs400()
+*/
+    //implements the UncaughtExceptionHandler interface
+    public void uncaughtException(Thread t, Throwable ex) {
+        Util.log(Util.LOG_CRITICAL, ex, "UncaughtException in the thread %s [%d]", t.getName(), server_num);
+        Util.flushLogAndExit();
+    }//uncaughtException()
 }//class ZabbixThread

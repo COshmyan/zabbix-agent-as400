@@ -500,12 +500,17 @@ public class ActiveCheck extends ZabbixThread {
         throw new ZbxException("Processing of log files is not implemented yet.");
     }//processLogCheck()
 
+    static class As400queue {
+        private MessageQueue mqueue = null;
+        private HistoryLog hlog     = null;
+    }//As400Queue (internal class)
+
     private void processEventLogCheck(ActiveCheckMetric metric) throws ZbxException {
 
         Util.log(Util.LOG_DEBUG,"in processEventLogCheck(): key:'%s', lastlogsize:%d (%08x), lastsent=%d, mtime_ms=%d, mtime_ms_sent=%d",
                 metric.key, metric.lastlogsize, metric.lastlogsize, metric.lastlogsize_sent, metric.mtime_ms, metric.mtime_ms_sent);
         try {
-            MessageQueue mqueue = null;
+            As400queue as400queue = new As400queue();
             boolean skipMode = true;
             String curPar, mqueueName;
             AgentRequest req = metric.agent_request;
@@ -513,12 +518,12 @@ public class ActiveCheck extends ZabbixThread {
             ZbxRegexp regex_value, regex_source, regex_eventid, regex_user;
 
             //parameters check; first parameter must be specified, all other - optional
-            if (1 > N || N > 8)
-                throw new ZbxException("Invalid number of parameters.");
+//            if (1 > N || N > 8)
+//                throw new ZbxException("Invalid number of parameters.");
             //param1: mqueue name. If not specified as fully qualified IFS path name, use default path
-            if ("".equals(mqueueName = req.getParam(0)))
-                throw new ZbxException("Invalid first parameter (message queue name).");
-            if ('/' != mqueueName.charAt(0))
+            if ( N < 1 || "".equals(mqueueName = req.getParam(0)) )
+                mqueueName = null;
+            if (null != mqueueName && '/' != mqueueName.charAt(0))
                 mqueueName = "/QSYS.LIB/" + mqueueName + ".MSGQ";
             //param2: regexp for a value
             if ( N < 2 || "".equals(curPar = req.getParam(1)) )
@@ -571,35 +576,21 @@ public class ActiveCheck extends ZabbixThread {
             try {
                 boolean prefix_eventid = Config.as400EventIdAsMessagePrefix();
                 boolean prefix_user    = Config.as400UserAsMessagePrefix();
+                boolean prefix_job     = Config.as400JobAsMessagePrefix();
                 Enumeration mlist = null;
-                mqueue = new MessageQueue(this.system, mqueueName);
-                mqueue.setListDirection(true);  //from oldest to newest
-                mqueue.setSeverity(keySeverity);
-                if (0l == metric.lastlogsize)
-                    mqueue.setUserStartingMessageKey(skipMode ? MessageQueue.NEWEST : MessageQueue.OLDEST);
-                else
-                    mqueue.setUserStartingMessageKey(Util.long2key(metric.lastlogsize));
-                try {
-                   mlist = mqueue.getMessages();
-                } catch (AS400Exception ex) {
-                    //Exception if this key not found. In this case set it to the oldest one.
-                    Util.log(Util.LOG_WARNING," AS400Exception, message is: '%s'", ex);
-                    if ("CPF2410".equals(ex.getAS400Message().getID())) {
-                        Util.log(Util.LOG_WARNING," Key %d (%08x) not found for the message queue %s, starting from the oldest one",
-                                metric.lastlogsize, metric.lastlogsize, mqueueName);
-                        //Util.log(Util.LOG_WARNING,"   MessageQueue.OLDEST = %d, MessageQueue.NEWEST = %d", Util.key2long(MessageQueue.OLDEST), Util.key2long(MessageQueue.NEWEST));
-                        metric.lastlogsize = NON_EXISTING_MESSAGE;
-                        mqueue.setUserStartingMessageKey(MessageQueue.OLDEST);
-                        mlist = mqueue.getMessages();
-                    } else {
-                        throw new ZbxException(ex.getAS400Message().getText());
-                    }//if
-                }//try-catch
+
+                if (null != mqueueName) {
+                    mlist = getMessageQueue(mqueueName, keySeverity, skipMode, metric, as400queue);
+                } else {
+                    mlist = getHistoryLog(keySeverity, skipMode, metric, as400queue);
+                }//if(MessageQueue or HistoryLog)
                 while (mlist.hasMoreElements()) {
                     if (!Config.running)
                         break;
                     QueuedMessage msg = (QueuedMessage)mlist.nextElement();
-                    long cur_lastlogsize = Util.key2long(msg.getKey());
+                    long   cur_mtime_ms = -1l; try { cur_mtime_ms = msg.getDate().getTimeInMillis(); } catch (NullPointerException ex) {}
+                    //last_logsize: we use a hash from message key for MessageQueue and message timestamp for HistoryLog (as it does not contain message keys)
+                    long cur_lastlogsize = (null != mqueueName) ? Util.key2long(msg.getKey()) : cur_mtime_ms;
                     if (cur_lastlogsize == metric.lastlogsize)
                         continue;   //already processed message
                     int    cur_severity = msg.getSeverity();
@@ -608,7 +599,6 @@ public class ActiveCheck extends ZabbixThread {
                     String cur_value    = msg.getText();
                     String cur_user     = msg.getCurrentUser();
                     int    cur_type     = msg.getType();
-                    long   cur_mtime_ms = -1l; try { cur_mtime_ms = msg.getDate().getTimeInMillis(); } catch (NullPointerException ex) {}
                     long   eventid      = 0l;
                     try { eventid = Long.parseLong(cur_eventid.replaceAll("[^0-9+-]*","")); } catch (NumberFormatException ex) { ; }
                     Util.log(Util.LOG_DEBUG," New message processed: Key=%08x (%d), severity=%d, Type=%d, User='%s', EventID='%s', JobName='%s', timestamp_ms=%d, Value='%s'",
@@ -619,15 +609,17 @@ public class ActiveCheck extends ZabbixThread {
                         Util.log(Util.LOG_DEBUG,"  Message with old mtime (%d < %d), ignored", cur_mtime_ms, metric.mtime_ms);
                         continue;
                     }//if(cur_mtime_ms)
-                    switch (cur_type) {
-                    case AS400Message.REPLY_NOT_VALIDITY_CHECKED:
-                    case AS400Message.REPLY_VALIDITY_CHECKED:
-                    case AS400Message.REPLY_MESSAGE_DEFAULT_USED:
-                    case AS400Message.REPLY_SYSTEM_DEFAULT_USED:
-                    case AS400Message.REPLY_FROM_SYSTEM_REPLY_LIST:
-                        Util.log(Util.LOG_DEBUG,"  Message type is 'reply' (%d), ignored", cur_type);
-                        continue;
-                    }//switch-case
+                    if (null != mqueueName) {
+                        switch (cur_type) {
+                        case AS400Message.REPLY_NOT_VALIDITY_CHECKED:
+                        case AS400Message.REPLY_VALIDITY_CHECKED:
+                        case AS400Message.REPLY_MESSAGE_DEFAULT_USED:
+                        case AS400Message.REPLY_SYSTEM_DEFAULT_USED:
+                        case AS400Message.REPLY_FROM_SYSTEM_REPLY_LIST:
+                            Util.log(Util.LOG_DEBUG,"  Message type is 'reply' (%d), ignored", cur_type);
+                            continue;
+                        }//switch-case
+                    }//if(messageQueue)
 
                     boolean b_regexp, b_source, b_eventid, b_user, matched, processed = false;
                     b_regexp  = (null == regex_value   || regex_value.matches  (cur_value)  );
@@ -642,8 +634,11 @@ public class ActiveCheck extends ZabbixThread {
                             cur_value = cur_eventid + " " + cur_value;
                         if (prefix_user)
                             cur_value = ("".equals(cur_user) ? "<blank>" : cur_user) + " " + cur_value;
+                        //prefix is: "NUMBER/USER/JOBNAME"
+                        if (prefix_job)
+                            cur_value = msg.getFromJobNumber() + "/" + msg.getUser() + "/" + cur_source + " " + cur_value;
                         DataObject dobj = new DataObject(metric.key_orig, cur_value);
-                        dobj.setTimestamp(msg.getDate().getTimeInMillis() / 1000);  //in seconds
+                        dobj.setTimestamp(cur_mtime_ms / 1000);  //in seconds
                         dobj.setLastlogsize(cur_lastlogsize);
                         dobj.setSeverity((long)cur_severity);
                         dobj.setEventId(eventid);
@@ -658,7 +653,7 @@ public class ActiveCheck extends ZabbixThread {
                         }//if (ret)
                     }//if (match)
                     p_count++;
-                    if (!matched | processed) {
+                    if (!matched || processed) {
                         metric.lastlogsize = cur_lastlogsize;
                         metric.mtime_ms    = cur_mtime_ms;
                     } else {
@@ -676,13 +671,65 @@ public class ActiveCheck extends ZabbixThread {
                 Util.log(Util.LOG_ERROR," processEventLogCheck() error: %s",ex);
                 throw new ZbxException("error: "+ex);
             } finally {
-                if (null != mqueue)
-                    try { mqueue.close(); } catch (Exception ex) { Util.log(Util.LOG_ERROR," processEventLogCheck() error: %s",ex); }
+                if (null != as400queue.mqueue)
+                    try { as400queue.mqueue.close(); } catch (Exception ex) { Util.log(Util.LOG_ERROR," processEventLogCheck() error: %s",ex); }
+                if (null != as400queue.hlog)
+                    try { as400queue.hlog.close(); } catch (Exception ex) { Util.log(Util.LOG_ERROR," processEventLogCheck() error: %s",ex); }
             }//try-catch
         } finally {
             Util.log(Util.LOG_DEBUG,"End of processEventLogCheck()");
         }//try-catch
     }//processEventLogCheck()
+
+    private Enumeration getMessageQueue(String mqueueName, int keySeverity, boolean skipMode, ActiveCheckMetric metric, As400queue as400queue)
+            throws IllegalPathNameException, AS400SecurityException, ErrorCompletingRequestException, ObjectDoesNotExistException, PropertyVetoException, IOException, InterruptedException, ZbxException {
+
+        Util.log(Util.LOG_DEBUG,"in getMessageQueue(): mqueueName:'%s'", mqueueName);
+
+        Enumeration mlist = null;
+        as400queue.mqueue = new MessageQueue(this.system, mqueueName);
+        as400queue.mqueue.setListDirection(true);  //from oldest to newest
+        as400queue.mqueue.setSeverity(keySeverity);
+        if (0l == metric.lastlogsize)
+            as400queue.mqueue.setUserStartingMessageKey(skipMode ? MessageQueue.NEWEST : MessageQueue.OLDEST);
+        else
+            as400queue.mqueue.setUserStartingMessageKey(Util.long2key(metric.lastlogsize));
+        try {
+            mlist = as400queue.mqueue.getMessages();
+        } catch (AS400Exception ex) {
+            //Exception if this key not found. In this case set it to the oldest one.
+            Util.log(Util.LOG_WARNING," AS400Exception, message is: '%s'", ex);
+            if ("CPF2410".equals(ex.getAS400Message().getID())) {
+                Util.log(Util.LOG_WARNING," Key %d (%08x) not found for the message queue %s, starting from the oldest one",
+                        metric.lastlogsize, metric.lastlogsize, mqueueName);
+                metric.lastlogsize = NON_EXISTING_MESSAGE;
+                as400queue.mqueue.close();
+                as400queue.mqueue.setUserStartingMessageKey(MessageQueue.OLDEST);
+                mlist = as400queue.mqueue.getMessages();
+            } else {
+                throw new ZbxException(ex.getAS400Message().getText());
+            }//if
+        }//try-catch
+        return mlist;
+    }//getMessageQueue()
+
+    private Enumeration getHistoryLog(int keySeverity, boolean skipMode, ActiveCheckMetric metric, As400queue as400queue)
+            throws IllegalPathNameException, AS400SecurityException, ErrorCompletingRequestException, ObjectDoesNotExistException, PropertyVetoException, IOException, InterruptedException, ZbxException {
+
+        Util.log(Util.LOG_DEBUG,"in getHistoryLog()");
+
+        as400queue.hlog = new HistoryLog(this.system);
+        as400queue.hlog.setMessageSeverity(keySeverity);
+        Date cur_date = new Date(Util.currentTimeMillis() - 5000); //5 seconds ago to be sure that writes to History Log with that timestamp has been completed
+        as400queue.hlog.setEndingDate(cur_date);
+        if (0l == metric.lastlogsize && skipMode) {
+            metric.lastlogsize = cur_date.getTime();
+            metric.mtime_ms = cur_date.getTime();
+            return Collections.emptyEnumeration();
+        }
+        as400queue.hlog.setStartingDate(new Date(metric.lastlogsize));
+        return as400queue.hlog.getMessages();
+    }//getHistoryLog()
 
     private void processCommonCheck(ActiveCheckMetric metric) throws ZbxException {
 

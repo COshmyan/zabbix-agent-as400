@@ -45,7 +45,7 @@ public class Util {
                             out.println(buf.toString());
                             buf = null;
                             if (LOG_WARNING <= Config.getDebugLevel()) {
-                                out.printf("\n% 6d:%s ", Thread.currentThread().getId(), ts.format(new java.util.Date()));
+                                out.printf("\n%7d:%s ", Thread.currentThread().getId(), ts.format(new java.util.Date()));
                                 out.println("Logging switched from the buffer to the log file '" + Config.getLogFile() + "'\n");
                             }
                         }//if (buf)
@@ -53,7 +53,7 @@ public class Util {
                         //Config is not processed yet, so we know nothing about log file name; therefore store to the buffer
                         if (null == buf)
                             buf = new StringBuilder();
-                        buf.append(String.format("% 6d:%s ", Thread.currentThread().getId(), ts.format(new java.util.Date())));
+                        buf.append(String.format("%7d:%s ", Thread.currentThread().getId(), ts.format(new java.util.Date())));
                         buf.append(String.format(message, args));
                         buf.append('\n');
                         return;

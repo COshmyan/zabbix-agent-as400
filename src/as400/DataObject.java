@@ -46,7 +46,7 @@ public class DataObject {
         this.value       = value;
         this.state_notsupported = false;
         this.lastlogsize = 0l;
-        this.severity    = 0l;
+        this.severity    = -1l;
         this.eventid     = 0l;
         this.mtime       = 0l;
         this.timestamp   = 0l;
@@ -191,7 +191,7 @@ public class DataObject {
 //        if (0  != (ActiveCheck.ZBX_METRIC_FLAG_LOG_LOGRT & flags))
         if (0  != (ActiveCheck.ZBX_METRIC_FLAG_LOG & flags))
             sb.append(",\n  \"mtime\":").append(mtime);
-        if (0l != severity)
+        if (-1l != severity)
             sb.append(",\n  \"severity\":").append(severity);
         if (0l != eventid)
             sb.append(",\n  \"eventid\":").append(eventid);

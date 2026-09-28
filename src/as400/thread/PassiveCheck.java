@@ -184,14 +184,16 @@ public class PassiveCheck extends ZabbixThread {
                     requestStr = new String(reqData, Util.getUtf8());
                 }//if (header is OK)
             } else {//header is absent: process it just as a command
-                while (read < reqData.length) {
-                    int c = zbxIn.read();
-                    if (0 > c || '\n' == c || '\r' == c) {
-                        reqData[read++] = (byte)'\n';
-                        break;
-                    }
-                    reqData[read++] = (byte)c;
-                }//
+                if (0 < read) {
+                    while (read < reqData.length) {
+                        int c = zbxIn.read();
+                        if (0 > c || '\n' == c || '\r' == c) {
+                            reqData[read++] = (byte)'\n';
+                            break;
+                        }
+                        reqData[read++] = (byte)c;
+                    }//wile
+                }//if(read>0)
                 if (0 < read) {//found
                     requestStr = new String(reqData, 0, read, Util.getUtf8());
                     Util.log(Util.LOG_DEBUG, "PassiveCheck.process(): request without header is: '%s'",

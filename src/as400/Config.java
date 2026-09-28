@@ -27,6 +27,7 @@ public class Config {
     private static       String as400ServerHost = "localhost";
     private static      boolean as400EventIdAsMessagePrefix = true;
     private static      boolean as400UserAsMessagePrefix = false;
+    private static      boolean as400JobAsMessagePrefix = false;
 
     //variables from config file
     private static String PidFile               = "/tmp/zabbix_agentd.pid";
@@ -53,6 +54,7 @@ public class Config {
     private static boolean AllowRoot            = false;
     private static String User                  = null;
     private static boolean UnsafeUserParameters = false;
+    private static ActiveCheck []activeChecks   = new ActiveCheck [0];
     //include
     private static ArrayList<String> Alias          = null;
     private static ArrayList<String> UserParameter  = null;
@@ -63,6 +65,7 @@ public class Config {
     public static String getAs400ServerHost()       {return as400ServerHost;        }
     public static boolean as400EventIdAsMessagePrefix(){return as400EventIdAsMessagePrefix;}
     public static boolean as400UserAsMessagePrefix(){return as400UserAsMessagePrefix;}
+    public static boolean as400JobAsMessagePrefix() {return as400JobAsMessagePrefix;}
     public static String getPidFile()               {return PidFile;                }
     public static String getLogFile()               {return LogFile;                }
     public static long   getLogFileSize()           {return LogFileSize;            }
@@ -88,6 +91,8 @@ public class Config {
     public static String getUser()                  {return User;                   }
     public static boolean getUnsafeUserParameters() {return UnsafeUserParameters;   }
     public static boolean isConfigured()            {return configured;             }
+    public static ActiveCheck []getActiveChecks()   {return activeChecks;           }
+    public static void   setActiveCheck(ActiveCheck []ac) {activeChecks = ac;       }
 
     public static ZbxMetric getZbxMetric(String key) throws ZbxException {
         ZbxMetric command = commands.get(key);
@@ -247,6 +252,9 @@ public class Config {
             break;
         case "as400UserAsMessagePrefix":
             as400UserAsMessagePrefix = parseBoolean(param_value);
+            break;
+        case "as400JobAsMessagePrefix":
+            as400JobAsMessagePrefix = parseBoolean(param_value);
             break;
         default:
             throw new ZbxException("Invalid parameter");
